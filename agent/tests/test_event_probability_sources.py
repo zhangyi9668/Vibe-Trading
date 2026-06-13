@@ -1,4 +1,4 @@
-from src.event_probability import EventProbability, RefreshState
+from src.event_probability import EventProbability, RefreshState, SourceStatus
 
 
 def test_event_probability_wire_serialization() -> None:
@@ -59,3 +59,9 @@ def test_refresh_state_wire_defaults() -> None:
             "pending": 0,
         },
     }
+
+
+def test_empty_source_status_defaults_as_of_to_none() -> None:
+    status = SourceStatus(source="polymarket", status="empty")
+
+    assert status.as_of is None
