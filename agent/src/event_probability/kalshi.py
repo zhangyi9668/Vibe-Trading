@@ -141,7 +141,11 @@ async def fetch_full(
     return rows
 
 
-def _group_markets(markets: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
+def _group_markets(
+    markets: Sequence[dict[str, Any]],
+    *,
+    series_ticker: str,
+) -> list[dict[str, Any]]:
     grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for market in markets:
         ticker = market.get("event_ticker")
@@ -156,7 +160,7 @@ def _group_markets(markets: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
                 "title": first.get("event_title") or first.get("title") or event_ticker,
                 "event_ticker": event_ticker,
                 "category": first.get("category"),
-                "series_ticker": first.get("series_ticker"),
+                "series_ticker": first.get("series_ticker") or series_ticker,
                 "markets": event_markets,
             }
         )
@@ -177,22 +181,35 @@ async def fetch_series(
     semaphore = asyncio.Semaphore(concurrency)
 
     async def fetch_one(series_ticker: str) -> list[EventProbability]:
-        async with semaphore:
-            response = await active_client.get(
-                MARKETS_URL,
-                params={
+        cursor: str | None = None
+        markets: list[dict[str, Any]] = []
+        while True:
+            params: dict[str, Any] = {
                     "limit": 200,
                     "status": "open",
                     "series_ticker": series_ticker,
-                },
-                timeout=REQUEST_TIMEOUT,
+            }
+            if cursor:
+                params["cursor"] = cursor
+            async with semaphore:
+                response = await active_client.get(
+                    MARKETS_URL,
+                    params=params,
+                    timeout=REQUEST_TIMEOUT,
+                )
+                response.raise_for_status()
+                payload = response.json()
+            page_markets = (
+                payload.get("markets", []) if isinstance(payload, dict) else []
             )
-            response.raise_for_status()
-            payload = response.json()
-        markets = payload.get("markets", []) if isinstance(payload, dict) else []
-        events = _group_markets(
-            [market for market in markets if isinstance(market, dict)]
-        )
+            markets.extend(
+                market for market in page_markets if isinstance(market, dict)
+            )
+            cursor = payload.get("cursor") if isinstance(payload, dict) else None
+            if not cursor:
+                break
+
+        events = _group_markets(markets, series_ticker=series_ticker)
         return [
             shaped
             for event in events
@@ -200,12 +217,14 @@ async def fetch_series(
         ]
 
     try:
-        batches = await asyncio.gather(
-            *(fetch_one(ticker) for ticker in dict.fromkeys(series_tickers))
+        results = await asyncio.gather(
+            *(fetch_one(ticker) for ticker in dict.fromkeys(series_tickers)),
+            return_exceptions=True,
         )
     finally:
         if owns_client:
             await active_client.aclose()
+    batches = [result for result in results if isinstance(result, list)]
     return [row for batch in batches for row in batch]
 
 

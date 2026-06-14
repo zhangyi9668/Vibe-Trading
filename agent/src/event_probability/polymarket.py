@@ -40,11 +40,23 @@ def shape_polymarket_market(data: dict[str, Any]) -> EventProbability | None:
             return None
 
         yes_index = next(
-            (index for index, label in enumerate(outcomes) if label.casefold() == "yes"),
-            0,
+            (
+                index
+                for index, label in enumerate(outcomes)
+                if label.casefold() == "yes"
+            ),
+            None,
         )
-        prob_yes = prices[yes_index] if yes_index < len(prices) else None
-        token_id_yes = token_ids[yes_index] if yes_index < len(token_ids) else None
+        prob_yes = (
+            prices[yes_index]
+            if yes_index is not None and yes_index < len(prices)
+            else None
+        )
+        token_id_yes = (
+            token_ids[yes_index]
+            if yes_index is not None and yes_index < len(token_ids)
+            else None
+        )
 
         return EventProbability(
             question=question,

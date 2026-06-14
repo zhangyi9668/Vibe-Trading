@@ -133,6 +133,23 @@ def test_polymarket_parses_json_encoded_fields() -> None:
     assert row.token_id_yes == "yes-token"
 
 
+def test_polymarket_does_not_invent_yes_for_multi_choice_market() -> None:
+    row = shape_polymarket_market(
+        {
+            "question": "Who will win?",
+            "outcomes": '["Alice", "Bob"]',
+            "outcomePrices": '["0.62", "0.38"]',
+            "clobTokenIds": '["alice-token", "bob-token"]',
+            "volume24hr": 1234,
+            "slug": "winner",
+        }
+    )
+
+    assert row is not None
+    assert row.prob_yes is None
+    assert row.token_id_yes is None
+
+
 def test_kalshi_uses_dollar_fields_and_nearest_fifty_percent_leg() -> None:
     row = shape_kalshi_event(
         {
@@ -305,6 +322,59 @@ def test_kalshi_quick_fetches_each_series_concurrently() -> None:
     assert len(rows) == 2
     assert set(requested_series) == {"KXFED", "KXCPI"}
     assert max_active == 2
+
+
+def test_kalshi_quick_follows_market_cursors_and_uses_series_fallback() -> None:
+    cursors: list[str | None] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        cursor = request.url.params.get("cursor")
+        cursors.append(cursor)
+        suffix = "1" if cursor is None else "2"
+        return httpx.Response(
+            200,
+            json={
+                "markets": [
+                    {
+                        "title": f"Market {suffix}",
+                        "event_ticker": f"KXCPI-{suffix}",
+                        "yes_sub_title": "Yes",
+                        "yes_ask_dollars": "0.5",
+                        "volume_24h_fp": "10",
+                    }
+                ],
+                "cursor": "next" if cursor is None else "",
+            },
+        )
+
+    async def run() -> list[EventProbability]:
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            return await fetch_series(["KXCPI"], client=client)
+
+    rows = asyncio.run(run())
+
+    assert cursors == [None, "next"]
+    assert [row.question for row in rows] == ["Market 1", "Market 2"]
+    assert all(row.series_ticker == "KXCPI" for row in rows)
+
+
+def test_kalshi_quick_waits_for_other_series_when_one_fails() -> None:
+    completed: list[str] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        series = request.url.params["series_ticker"]
+        if series == "FAIL":
+            return httpx.Response(503)
+        await asyncio.sleep(0.01)
+        completed.append(series)
+        return httpx.Response(200, json={"markets": []})
+
+    async def run() -> list[EventProbability]:
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            return await fetch_series(["FAIL", "KXCPI"], client=client)
+
+    assert asyncio.run(run()) == []
+    assert completed == ["KXCPI"]
 
 
 def test_priority_series_seed_and_rank_core_topics_only() -> None:
