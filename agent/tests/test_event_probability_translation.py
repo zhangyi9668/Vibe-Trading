@@ -112,3 +112,63 @@ def test_failed_batch_still_observes_batch_delay(tmp_path: Path) -> None:
     )
 
     assert delays == [0.25]
+
+
+def test_invalid_translator_result_does_not_interrupt_refresh(tmp_path: Path) -> None:
+    async def invalid(_: list[str]) -> dict[str, str]:
+        return None  # type: ignore[return-value]
+
+    row = event("English")
+    translator = TitleTranslator(
+        ProbabilityStorage(tmp_path),
+        translate_batch=invalid,
+        sleep=lambda _: async_noop(),
+    )
+
+    stats = asyncio.run(translator.translate([row], limit=1, batch_delay=0))
+
+    assert row.question_zh is None
+    assert stats.pending == 1
+
+
+def test_cache_write_failure_does_not_interrupt_refresh(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    async def translate(titles: list[str]) -> dict[str, str]:
+        return {titles[0]: "中文"}
+
+    store = ProbabilityStorage(tmp_path)
+    monkeypatch.setattr(
+        store,
+        "save_translation_cache",
+        lambda _: (_ for _ in ()).throw(OSError("disk full")),
+    )
+    row = event("English")
+    translator = TitleTranslator(
+        store,
+        translate_batch=translate,
+        sleep=lambda _: async_noop(),
+    )
+
+    stats = asyncio.run(translator.translate([row], limit=1, batch_delay=0))
+
+    assert row.question_zh == "中文"
+    assert stats.new_translations == 1
+
+
+def test_empty_cached_translation_remains_pending(tmp_path: Path) -> None:
+    store = ProbabilityStorage(tmp_path)
+    store.save_translation_cache({"English": ""})
+    row = event("English")
+    translator = TitleTranslator(
+        store,
+        translate_batch=lambda _: async_noop(),  # type: ignore[arg-type]
+        sleep=lambda _: async_noop(),
+    )
+
+    stats = asyncio.run(translator.translate([row], limit=0, batch_delay=0))
+
+    assert row.question_zh is None
+    assert stats.cache_hits == 0
+    assert stats.pending == 1

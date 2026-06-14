@@ -41,6 +41,11 @@ class TitleTranslator:
             raise ValueError("batch_delay must be non-negative")
 
         cache = self.store.load_translation_cache()
+        valid_cache = {
+            title: translation
+            for title, translation in cache.items()
+            if translation.strip()
+        }
         rows_by_title: dict[str, list[EventProbability]] = {}
         for event in events:
             rows_by_title.setdefault(event.question, []).append(event)
@@ -48,7 +53,7 @@ class TitleTranslator:
         cache_hits = 0
         new_titles: list[str] = []
         for title, rows in rows_by_title.items():
-            cached = cache.get(title)
+            cached = valid_cache.get(title)
             if cached:
                 cache_hits += 1
                 for row in rows:
@@ -64,7 +69,7 @@ class TitleTranslator:
                 translated = await self.translate_batch(batch)
             except Exception:
                 translated = {}
-            else:
+            if isinstance(translated, dict):
                 accepted = {
                     title: value
                     for title, value in translated.items()
@@ -72,7 +77,11 @@ class TitleTranslator:
                 }
                 if accepted:
                     cache.update(accepted)
-                    self.store.save_translation_cache(cache)
+                    valid_cache.update(accepted)
+                    try:
+                        self.store.save_translation_cache(cache)
+                    except OSError:
+                        pass
                     translated_count += len(accepted)
                     for title, value in accepted.items():
                         for row in rows_by_title[title]:
@@ -83,7 +92,7 @@ class TitleTranslator:
         pending = sum(
             1
             for title in new_titles
-            if title not in cache
+            if title not in valid_cache
         )
         return TranslationStats(
             new_translations=translated_count,
