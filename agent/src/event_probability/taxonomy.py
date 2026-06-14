@@ -1,4 +1,5 @@
 from collections.abc import Mapping, Sequence
+import re
 
 from .models import EventProbability
 
@@ -93,7 +94,7 @@ _KEYWORD_GROUPS = (
         (
             "federal reserve",
             "the fed",
-            "fed ",
+            "fed",
             "interest rate",
             "rate cut",
             "rate hike",
@@ -171,7 +172,7 @@ _CATEGORY_TOPICS = {
 def classify(title: str, native_category: str | None = None) -> str:
     normalized_title = title.lower()
     for topic, keywords in _KEYWORD_GROUPS:
-        if any(keyword in normalized_title for keyword in keywords):
+        if any(_contains_keyword(normalized_title, keyword) for keyword in keywords):
             return topic
 
     if native_category:
@@ -179,14 +180,26 @@ def classify(title: str, native_category: str | None = None) -> str:
     return "other"
 
 
+def _contains_keyword(title: str, keyword: str) -> bool:
+    return re.search(rf"(?<!\w){re.escape(keyword)}(?!\w)", title) is not None
+
+
 def limit_by_topic(
     rows: Sequence[EventProbability],
     caps: Mapping[str, int] | None = None,
 ) -> list[EventProbability]:
-    effective_caps = MODULE_CAPS | dict(caps or {})
+    overrides = dict(caps or {})
+    unknown_caps = overrides.keys() - MODULE_CAPS.keys()
+    if unknown_caps:
+        raise ValueError(f"Unknown topic cap: {sorted(unknown_caps)[0]}")
+    if any(type(cap) is not int or cap < 0 for cap in overrides.values()):
+        raise ValueError("Topic caps must be a non-negative integer")
+
+    effective_caps = MODULE_CAPS | overrides
     grouped = {topic: [] for topic in TOPIC_ORDER}
     for row in rows:
-        grouped.setdefault(row.topic, []).append(row)
+        topic = row.topic if row.topic in grouped else "other"
+        grouped[topic].append(row)
 
     limited: list[EventProbability] = []
     for topic in TOPIC_ORDER:

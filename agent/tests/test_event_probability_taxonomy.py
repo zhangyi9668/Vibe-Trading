@@ -1,3 +1,5 @@
+import pytest
+
 from src.event_probability.models import EventProbability
 from src.event_probability.taxonomy import classify, limit_by_topic
 
@@ -17,6 +19,12 @@ def test_ordered_topics_resolve_overlapping_terms() -> None:
 def test_kalshi_category_is_a_fallback() -> None:
     assert classify("A neutral title", "Economics") == "macro_economy"
     assert classify("A neutral title", "Science and Technology") == "ai_technology"
+
+
+def test_keyword_matching_respects_word_boundaries() -> None:
+    assert classify("Will Golden State Warriors win the championship?") == "sports"
+    assert classify("Will Ex Machina win best movie?") == "entertainment"
+    assert classify("Will the devoted candidate appear?") == "other"
 
 
 def test_topic_caps_keep_highest_volume_rows_in_topic_order() -> None:
@@ -44,3 +52,24 @@ def test_topic_caps_keep_highest_volume_rows_in_topic_order() -> None:
 
     assert limited[0] == monetary
     assert [row.volume_24h for row in limited[1:]] == [19.0, 18.0, 17.0]
+
+
+def test_unknown_topics_are_kept_in_other() -> None:
+    row = EventProbability(
+        question="unknown",
+        topic="custom_topic",
+        source="polymarket",
+        slug="unknown",
+    )
+
+    assert limit_by_topic([row]) == [row]
+
+
+def test_topic_caps_reject_invalid_configuration() -> None:
+    with pytest.raises(ValueError, match="Unknown topic cap"):
+        limit_by_topic([], {"typo": 1})
+
+    with pytest.raises(ValueError, match="non-negative integer"):
+        limit_by_topic([], {"sports": -1})
+
+    assert limit_by_topic([], {"sports": 0}) == []
