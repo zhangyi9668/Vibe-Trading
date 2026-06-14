@@ -1,8 +1,22 @@
+import asyncio
+
+import httpx
+
 from src.event_probability import (
     EventProbability,
     ProbabilitySnapshot,
     RefreshState,
     SourceStatus,
+)
+from src.event_probability.kalshi import (
+    discover_priority_series,
+    fetch_full,
+    fetch_series,
+    shape_kalshi_event,
+)
+from src.event_probability.polymarket import (
+    fetch_markets,
+    shape_polymarket_market,
 )
 
 
@@ -100,3 +114,233 @@ def test_probability_snapshot_mutable_defaults_are_isolated() -> None:
     assert second.events == []
     assert second.sources == []
     assert second.refresh.translation.pending == 0
+
+
+def test_polymarket_parses_json_encoded_fields() -> None:
+    row = shape_polymarket_market(
+        {
+            "question": "Will event X happen?",
+            "outcomes": '["Yes", "No"]',
+            "outcomePrices": '["0.62", "0.38"]',
+            "clobTokenIds": '["yes-token", "no-token"]',
+            "volume24hr": 1234,
+            "slug": "event-x",
+        }
+    )
+
+    assert row is not None
+    assert row.prob_yes == 0.62
+    assert row.token_id_yes == "yes-token"
+
+
+def test_kalshi_uses_dollar_fields_and_nearest_fifty_percent_leg() -> None:
+    row = shape_kalshi_event(
+        {
+            "title": "Average gas price",
+            "event_ticker": "KXGAS",
+            "category": "Commodities",
+            "series_ticker": "KXGAS",
+            "markets": [
+                {
+                    "yes_sub_title": "Above $4.10",
+                    "yes_ask_dollars": "0.95",
+                    "volume_24h_fp": "10",
+                },
+                {
+                    "yes_sub_title": "Above $4.20",
+                    "yes_ask_dollars": "0.53",
+                    "volume_24h_fp": "20",
+                },
+                {
+                    "yes_sub_title": "Above $4.30",
+                    "yes_ask_dollars": "0.08",
+                    "volume_24h_fp": "30",
+                },
+            ],
+        }
+    )
+
+    assert row is not None
+    assert row.prob_yes == 0.53
+    assert row.pick_label == "Above $4.20"
+    assert row.volume_24h == 60.0
+
+
+def test_polymarket_paginates_by_offset_and_orders_on_server() -> None:
+    requests: list[dict[str, str]] = []
+    market = {
+        "question": "Will event X happen?",
+        "outcomes": '["Yes", "No"]',
+        "outcomePrices": '["0.62", "0.38"]',
+        "clobTokenIds": '["yes-token", "no-token"]',
+        "volume24hr": 1234,
+        "slug": "event-x",
+    }
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(dict(request.url.params))
+        payload = [market] * 100 if request.url.params["offset"] == "0" else []
+        return httpx.Response(200, json=payload)
+
+    async def run() -> list[EventProbability]:
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            return await fetch_markets(client=client, max_pages=3)
+
+    rows = asyncio.run(run())
+
+    assert len(rows) == 100
+    assert [request["offset"] for request in requests] == ["0", "100"]
+    assert all(request["order"] == "volume24hr" for request in requests)
+    assert all(request["ascending"] == "false" for request in requests)
+
+
+def test_polymarket_retries_a_failed_page_once() -> None:
+    attempts = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            return httpx.Response(503)
+        return httpx.Response(200, json=[])
+
+    async def run() -> list[EventProbability]:
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            return await fetch_markets(client=client, max_pages=1)
+
+    assert asyncio.run(run()) == []
+    assert attempts == 2
+
+
+def test_kalshi_full_follows_cursors_and_reports_progress() -> None:
+    cursors: list[str | None] = []
+    progress: list[tuple[int, int]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.params["limit"] == "200"
+        assert request.url.params["status"] == "open"
+        assert request.url.params["with_nested_markets"] == "true"
+        cursor = request.url.params.get("cursor")
+        cursors.append(cursor)
+        suffix = "1" if cursor is None else "2"
+        return httpx.Response(
+            200,
+            json={
+                "events": [
+                    {
+                        "title": f"Fed event {suffix}",
+                        "event_ticker": f"KXFED-{suffix}",
+                        "category": "Economics",
+                        "series_ticker": "KXFED",
+                        "markets": [
+                            {
+                                "yes_sub_title": "Yes",
+                                "yes_ask_dollars": "0.5",
+                                "volume_24h_fp": "10",
+                            }
+                        ],
+                    }
+                ],
+                "cursor": "next" if cursor is None else "",
+            },
+        )
+
+    async def run() -> list[EventProbability]:
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            return await fetch_full(
+                client=client,
+                max_pages=5,
+                on_progress=lambda current, total: progress.append((current, total)),
+            )
+
+    rows = asyncio.run(run())
+
+    assert len(rows) == 2
+    assert cursors == [None, "next"]
+    assert progress == [(1, 5), (2, 5)]
+
+
+def test_kalshi_quick_fetches_each_series_concurrently() -> None:
+    requested_series: list[str] = []
+    active = 0
+    max_active = 0
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal active, max_active
+        assert request.url.params["limit"] == "200"
+        assert request.url.params["status"] == "open"
+        series = request.url.params["series_ticker"]
+        requested_series.append(series)
+        active += 1
+        max_active = max(max_active, active)
+        await asyncio.sleep(0.01)
+        active -= 1
+        return httpx.Response(
+            200,
+            json={
+                "markets": [
+                    {
+                        "title": f"{series} market",
+                        "event_ticker": f"{series}-EVENT",
+                        "series_ticker": series,
+                        "category": "Economics",
+                        "yes_sub_title": "Yes",
+                        "yes_ask_dollars": "0.5",
+                        "volume_24h_fp": "10",
+                    }
+                ]
+            },
+        )
+
+    async def run() -> list[EventProbability]:
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            return await fetch_series(
+                ["KXFED", "KXCPI"],
+                client=client,
+                concurrency=2,
+            )
+
+    rows = asyncio.run(run())
+
+    assert len(rows) == 2
+    assert set(requested_series) == {"KXFED", "KXCPI"}
+    assert max_active == 2
+
+
+def test_priority_series_seed_and_rank_core_topics_only() -> None:
+    events = [
+        EventProbability(
+            question="CPI",
+            topic="macro_economy",
+            source="kalshi",
+            slug="cpi-1",
+            series_ticker="KXCPI",
+            volume_24h=30,
+        ),
+        EventProbability(
+            question="CPI second market",
+            topic="macro_economy",
+            source="kalshi",
+            slug="cpi-2",
+            series_ticker="KXCPI",
+            volume_24h=20,
+        ),
+        EventProbability(
+            question="Jobs",
+            topic="macro_economy",
+            source="kalshi",
+            slug="jobs",
+            series_ticker="KXJOBS",
+            volume_24h=40,
+        ),
+        EventProbability(
+            question="Sports",
+            topic="sports",
+            source="kalshi",
+            slug="sports",
+            series_ticker="KXSPORTS",
+            volume_24h=1000,
+        ),
+    ]
+
+    assert discover_priority_series(events) == ["KXFED", "KXCPI", "KXJOBS"]
