@@ -56,6 +56,74 @@ export interface UploadResult {
   filename: string;
 }
 
+export type ProbabilitySource = "polymarket" | "kalshi";
+
+export type ProbabilityTopic =
+  | "monetary_policy"
+  | "macro_economy"
+  | "geopolitics"
+  | "political_elections"
+  | "indices_commodities"
+  | "ai_technology"
+  | "crypto"
+  | "sports"
+  | "entertainment"
+  | "other";
+
+export interface EventProbability {
+  question: string;
+  question_zh: string | null;
+  topic: ProbabilityTopic;
+  outcomes: string[];
+  prices: Array<number | null>;
+  prob_yes: number | null;
+  pick_label: string | null;
+  change_24h: number | null;
+  change_7d: number | null;
+  volume_24h: number;
+  liquidity: number;
+  end_date: string | null;
+  slug: string;
+  series_ticker: string | null;
+  token_id_yes: string | null;
+  source: ProbabilitySource;
+  source_category: string | null;
+}
+
+export interface ProbabilityTranslationStats {
+  new_translations: number;
+  cache_hits: number;
+  pending: number;
+}
+
+export interface ProbabilityRefreshState {
+  status: "idle" | "queued" | "running" | "done" | "error";
+  kind: "quick" | "full" | null;
+  stage: string | null;
+  progress_current: number;
+  progress_total: number;
+  started_at: string | null;
+  finished_at: string | null;
+  error: string | null;
+  translation: ProbabilityTranslationStats;
+}
+
+export interface ProbabilitySourceStatus {
+  source: ProbabilitySource;
+  status: "ok" | "stale" | "error" | "empty";
+  as_of: string | null;
+  event_count: number;
+  error: string | null;
+}
+
+export interface ProbabilityOverview {
+  as_of: string | null;
+  events: EventProbability[];
+  sources: ProbabilitySourceStatus[];
+  translation_cache_size: number;
+  refresh: ProbabilityRefreshState;
+}
+
 async function uploadFile(file: File): Promise<UploadResult> {
   const form = new FormData();
   form.append("file", file);
@@ -137,6 +205,18 @@ export const api = {
       method: "PUT",
       body: JSON.stringify(settings),
     }),
+  getEventProbabilityOverview: () =>
+    request<ProbabilityOverview>("/event-probability/overview"),
+  startEventProbabilityRefresh: (kind: "quick" | "full") =>
+    request<ProbabilityRefreshState>(`/event-probability/refresh/${kind}`, {
+      method: "POST",
+    }),
+  getEventProbabilityRefreshStatus: () =>
+    request<ProbabilityRefreshState>("/event-probability/refresh/status"),
+  getEventProbabilityHistory: (tokenId: string) =>
+    request<Array<{ t: number; p: number }>>(
+      `/event-probability/history/${encodeURIComponent(tokenId)}`,
+    ),
 
   // Alpha Zoo API
   listAlphas: (params: AlphaListParams = {}) => {

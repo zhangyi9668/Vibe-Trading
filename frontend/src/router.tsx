@@ -19,6 +19,11 @@ const Correlation = lazy(() =>
 const AlphaZoo = lazy(() =>
   import("@/pages/AlphaZoo").then((m) => ({ default: m.AlphaZoo })),
 );
+const EventProbability = lazy(() =>
+  import("@/pages/EventProbability").then((m) => ({
+    default: m.EventProbability,
+  })),
+);
 
 function PageLoader() {
   return (
@@ -49,6 +54,7 @@ export const router = createBrowserRouter([
       { path: "/alpha-zoo", element: wrap(AlphaZoo) },
       { path: "/alpha-zoo/bench", element: wrap(AlphaZoo) },
       { path: "/alpha-zoo/:alphaId", element: wrap(AlphaZoo) },
+      { path: "/event-probability", element: wrap(EventProbability) },
     ],
   },
 ]);
