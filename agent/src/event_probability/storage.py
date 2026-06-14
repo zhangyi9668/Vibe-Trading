@@ -1,5 +1,6 @@
 import json
 import os
+import time
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import Any, Literal
@@ -12,6 +13,8 @@ from .models import EventProbability, ProbabilitySnapshot
 
 
 SourceName = Literal["polymarket", "kalshi"]
+_SOURCES = {"polymarket", "kalshi"}
+_REPLACE_BACKOFF = (0.025, 0.05, 0.1, 0.2, 0.4)
 
 
 class ProbabilityStorage:
@@ -24,8 +27,11 @@ class ProbabilityStorage:
         source: SourceName,
         events: list[EventProbability],
     ) -> bool:
+        self._validate_source(source)
         if not events:
             return False
+        if any(event.source != source for event in events):
+            raise ValueError("Event source does not match snapshot source")
         self._write_json(
             self._source_path(source),
             [event.model_dump(mode="json") for event in events],
@@ -33,13 +39,19 @@ class ProbabilityStorage:
         return True
 
     def load_source(self, source: SourceName) -> list[EventProbability]:
+        self._validate_source(source)
         payload = self._read_json(self._source_path(source), [])
         if not isinstance(payload, list):
             return []
-        try:
-            return [EventProbability.model_validate(row) for row in payload]
-        except (TypeError, ValidationError):
-            return []
+        events: list[EventProbability] = []
+        for row in payload:
+            try:
+                event = EventProbability.model_validate(row)
+            except (TypeError, ValidationError):
+                continue
+            if event.source == source:
+                events.append(event)
+        return events
 
     def save_overview(self, snapshot: ProbabilitySnapshot) -> None:
         self._write_json(
@@ -80,7 +92,13 @@ class ProbabilityStorage:
         return list(dict.fromkeys(item for item in payload if isinstance(item, str)))
 
     def _source_path(self, source: SourceName) -> Path:
+        self._validate_source(source)
         return self.base_dir / f"{source}_snapshot.json"
+
+    @staticmethod
+    def _validate_source(source: str) -> None:
+        if source not in _SOURCES:
+            raise ValueError(f"Unsupported source: {source}")
 
     @staticmethod
     def _read_json(path: Path, default: Any) -> Any:
@@ -106,7 +124,33 @@ class ProbabilityStorage:
                 handle.write("\n")
                 handle.flush()
                 os.fsync(handle.fileno())
-            os.replace(temp_path, path)
+            self._replace_with_retry(temp_path, path)
+            self._fsync_dir()
         finally:
             if temp_path is not None and temp_path.exists():
                 temp_path.unlink()
+
+    @staticmethod
+    def _replace_with_retry(source: Path, target: Path) -> None:
+        for attempt in range(len(_REPLACE_BACKOFF) + 1):
+            try:
+                os.replace(source, target)
+                return
+            except OSError as exc:
+                if getattr(exc, "winerror", None) not in {5, 32}:
+                    raise
+                if attempt == len(_REPLACE_BACKOFF):
+                    raise
+                time.sleep(_REPLACE_BACKOFF[attempt])
+
+    def _fsync_dir(self) -> None:
+        try:
+            directory_fd = os.open(self.base_dir, os.O_RDONLY)
+        except OSError:
+            return
+        try:
+            os.fsync(directory_fd)
+        except OSError:
+            pass
+        finally:
+            os.close(directory_fd)

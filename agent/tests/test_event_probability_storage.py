@@ -1,5 +1,8 @@
 import json
+import os
 from pathlib import Path
+
+import pytest
 
 from src.event_probability.models import EventProbability, ProbabilitySnapshot
 from src.event_probability.storage import ProbabilityStorage
@@ -72,3 +75,51 @@ def test_written_json_is_utf8_and_human_readable(tmp_path: Path) -> None:
     )
 
     assert payload == {"title": "中文标题"}
+
+
+def test_source_name_and_event_source_are_validated(tmp_path: Path) -> None:
+    store = ProbabilityStorage(tmp_path)
+
+    with pytest.raises(ValueError, match="Unsupported source"):
+        store.save_source("../escaped", [sample_event()])  # type: ignore[arg-type]
+
+    with pytest.raises(ValueError, match="does not match"):
+        store.save_source("kalshi", [sample_event()])
+
+
+def test_source_load_skips_individual_invalid_rows(tmp_path: Path) -> None:
+    store = ProbabilityStorage(tmp_path)
+    (tmp_path / "polymarket_snapshot.json").write_text(
+        json.dumps([sample_event().model_dump(mode="json"), {"broken": True}]),
+        encoding="utf-8",
+    )
+
+    rows = store.load_source("polymarket")
+
+    assert [row.slug for row in rows] == ["sample"]
+
+
+def test_transient_windows_replace_error_is_retried(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store = ProbabilityStorage(tmp_path)
+    real_replace = os.replace
+    attempts = 0
+
+    def flaky_replace(source: Path, target: Path) -> None:
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            error = OSError("sharing violation")
+            error.winerror = 32  # type: ignore[attr-defined]
+            raise error
+        real_replace(source, target)
+
+    monkeypatch.setattr("src.event_probability.storage.os.replace", flaky_replace)
+    monkeypatch.setattr("src.event_probability.storage.time.sleep", lambda _: None)
+
+    store.save_translation_cache({"title": "标题"})
+
+    assert attempts == 2
+    assert store.load_translation_cache() == {"title": "标题"}
