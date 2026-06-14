@@ -63,20 +63,20 @@ class TitleTranslator:
             try:
                 translated = await self.translate_batch(batch)
             except Exception:
-                continue
-
-            accepted = {
-                title: value
-                for title, value in translated.items()
-                if title in batch and isinstance(value, str) and value.strip()
-            }
-            if accepted:
-                cache.update(accepted)
-                self.store.save_translation_cache(cache)
-                translated_count += len(accepted)
-                for title, value in accepted.items():
-                    for row in rows_by_title[title]:
-                        row.question_zh = value
+                translated = {}
+            else:
+                accepted = {
+                    title: value
+                    for title, value in translated.items()
+                    if title in batch and isinstance(value, str) and value.strip()
+                }
+                if accepted:
+                    cache.update(accepted)
+                    self.store.save_translation_cache(cache)
+                    translated_count += len(accepted)
+                    for title, value in accepted.items():
+                        for row in rows_by_title[title]:
+                            row.question_zh = value
             if start + batch_size < len(selected) and batch_delay:
                 await self.sleep(batch_delay)
 

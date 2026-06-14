@@ -85,3 +85,30 @@ def test_translation_deduplicates_titles_and_ignores_unknown_keys(tmp_path: Path
     assert calls == [["duplicate"]]
     assert [row.question_zh for row in rows] == ["重复", "重复"]
     assert stats.new_translations == 1
+
+
+def test_failed_batch_still_observes_batch_delay(tmp_path: Path) -> None:
+    delays: list[float] = []
+
+    async def fail(_: list[str]) -> dict[str, str]:
+        raise RuntimeError("provider down")
+
+    async def record_delay(delay: float) -> None:
+        delays.append(delay)
+
+    translator = TitleTranslator(
+        ProbabilityStorage(tmp_path),
+        translate_batch=fail,
+        sleep=record_delay,
+    )
+
+    asyncio.run(
+        translator.translate(
+            [event("one"), event("two")],
+            limit=2,
+            batch_size=1,
+            batch_delay=0.25,
+        )
+    )
+
+    assert delays == [0.25]
