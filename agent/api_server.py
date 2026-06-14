@@ -534,7 +534,9 @@ app.add_middleware(
 # text/html`` (e.g. a user pasting the URL into the address bar).
 
 _FRONTEND_DIST = Path(__file__).resolve().parent.parent / "frontend" / "dist"
-_SPA_HTML_EXACT_PATHS: frozenset[str] = frozenset({"/correlation"})
+_SPA_HTML_EXACT_PATHS: frozenset[str] = frozenset(
+    {"/correlation", "/event-probability"}
+)
 # Each regex matches a complete request path. Trailing slash optional.
 _SPA_HTML_PATH_REGEX: tuple[re.Pattern[str], ...] = (
     # ``/runs/{run_id}`` — RunDetail page. Excludes ``/runs/{id}/code``,
@@ -3060,6 +3062,11 @@ async def stop_runner_endpoint(payload: LiveRunnerControlRequest):
 
 from src.api.alpha_routes import register_alpha_routes  # noqa: E402
 register_alpha_routes(app)
+
+from src.api.event_probability_routes import (  # noqa: E402
+    register_event_probability_routes,
+)
+register_event_probability_routes(app, require_auth=require_auth)
 
 
 # ============================================================================

@@ -20,3 +20,7 @@ repository as factual mathematical content (formulas are not copyrightable):
 Prose, tables, and figures from the source papers and reports are NOT
 reproduced in this repository. Only the mathematical formulas — which are
 factual content and not subject to copyright — are reimplemented here.
+
+The event probability data pipeline includes code adapted from globalpercent
+by Simon Lin (https://github.com/simonlin1212/globalpercent), licensed under
+the Apache License 2.0.
