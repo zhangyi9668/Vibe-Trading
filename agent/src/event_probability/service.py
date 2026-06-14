@@ -68,7 +68,10 @@ class EventProbabilityService:
                 kind=kind,
                 stage="fetching_polymarket",
             )
-            self._refresh_task = asyncio.create_task(self._run_refresh(kind))
+            self._persist_state()
+            task = asyncio.create_task(self._run_refresh(kind))
+            self._refresh_task = task
+            task.add_done_callback(self._on_refresh_done)
             return self.get_refresh_state()
 
     async def get_history(self, token_id: str) -> list[dict[str, float | int]]:
@@ -82,6 +85,7 @@ class EventProbabilityService:
             stage="fetching_polymarket",
             started_at=started_at,
         )
+        self._persist_state()
         try:
             if kind == "quick":
                 saved_series = self.storage.load_priority_series()
@@ -107,6 +111,9 @@ class EventProbabilityService:
                 ),
                 self._store_source_result("kalshi", kalshi_result, now),
             ]
+            successful_sources = sum(
+                status.status == "ok" for status in source_statuses
+            )
 
             kalshi_rows = self.storage.load_source("kalshi")
             if kind == "full" and not isinstance(kalshi_result, BaseException):
@@ -131,8 +138,13 @@ class EventProbabilityService:
 
             self._set_stage("saving")
             finished_at = _now()
-            terminal_status = "done" if rows else "error"
-            error = None if rows else "No usable event probability data"
+            terminal_status = "done" if successful_sources else "error"
+            error = (
+                None
+                if successful_sources
+                else "All event probability sources failed or returned no data"
+            )
+            previous_overview = self.storage.load_overview()
             self._state = RefreshState(
                 status=terminal_status,
                 kind=kind,
@@ -144,7 +156,11 @@ class EventProbabilityService:
             )
             self.storage.save_overview(
                 ProbabilitySnapshot(
-                    as_of=finished_at,
+                    as_of=(
+                        finished_at
+                        if successful_sources
+                        else previous_overview.as_of
+                    ),
                     events=rows,
                     sources=source_statuses,
                     translation_cache_size=len(
@@ -153,6 +169,17 @@ class EventProbabilityService:
                     refresh=self._state,
                 )
             )
+        except asyncio.CancelledError:
+            self._state = RefreshState(
+                status="error",
+                kind=kind,
+                stage=self._state.stage,
+                started_at=started_at,
+                finished_at=_now(),
+                error="Refresh cancelled",
+            )
+            self._persist_state()
+            raise
         except Exception as exc:
             self._state = RefreshState(
                 status="error",
@@ -162,19 +189,43 @@ class EventProbabilityService:
                 finished_at=_now(),
                 error=str(exc),
             )
-            snapshot = self.storage.load_overview()
-            snapshot.refresh = self._state
-            self.storage.save_overview(snapshot)
+            self._persist_state()
 
     def _update_full_progress(self, current: int, total: int) -> None:
         self._state.stage = "fetching_kalshi"
         self._state.progress_current = current
         self._state.progress_total = total
+        self._persist_state()
 
     def _set_stage(self, stage: str) -> None:
         self._state.stage = stage
         self._state.progress_current = 0
         self._state.progress_total = 0
+        self._persist_state()
+
+    def _persist_state(self) -> None:
+        snapshot = self.storage.load_overview()
+        snapshot.refresh = self._state.model_copy(deep=True)
+        self.storage.save_overview(snapshot)
+
+    def _on_refresh_done(self, task: asyncio.Task[None]) -> None:
+        if task.cancelled() and self._state.status != "error":
+            self._state = RefreshState(
+                status="error",
+                kind=self._state.kind,
+                stage=self._state.stage,
+                started_at=self._state.started_at,
+                finished_at=_now(),
+                error="Refresh cancelled",
+            )
+            self._persist_state()
+        else:
+            try:
+                task.exception()
+            except asyncio.CancelledError:
+                pass
+        if self._refresh_task is task:
+            self._refresh_task = None
 
     def _store_source_result(
         self,

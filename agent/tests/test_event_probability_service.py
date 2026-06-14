@@ -174,8 +174,61 @@ def test_second_refresh_reuses_running_task(tmp_path: Path) -> None:
 
         assert first.status == "queued"
         assert second.kind == "quick"
+        assert service.storage.load_overview().refresh.status in {"queued", "running"}
         gate.set()
         assert service._refresh_task is not None
         await service._refresh_task
+
+    asyncio.run(scenario())
+
+
+def test_all_source_failures_keep_old_as_of_and_report_error(tmp_path: Path) -> None:
+    store = ProbabilityStorage(tmp_path)
+    old_as_of = "2026-06-13T00:00:00+00:00"
+    store.save_source("polymarket", [event("old")])
+    store.save_overview(
+        ProbabilitySnapshot(
+            as_of=old_as_of,
+            events=[event("old")],
+        )
+    )
+    service = EventProbabilityService(
+        storage=store,
+        polymarket_fetch=AsyncMock(side_effect=RuntimeError("poly down")),
+        kalshi_full_fetch=AsyncMock(),
+        kalshi_series_fetch=AsyncMock(side_effect=RuntimeError("kalshi down")),
+        translator=SpyTranslator(),
+    )
+
+    asyncio.run(service._run_refresh("quick"))
+
+    snapshot = store.load_overview()
+    assert snapshot.refresh.status == "error"
+    assert snapshot.as_of == old_as_of
+    assert snapshot.events[0].question == "old"
+
+
+def test_cancelled_refresh_persists_terminal_state(tmp_path: Path) -> None:
+    async def scenario() -> None:
+        gate = asyncio.Event()
+
+        async def blocked_fetch() -> list[EventProbability]:
+            await gate.wait()
+            return []
+
+        service = service_for(
+            tmp_path,
+            polymarket_fetch=AsyncMock(side_effect=blocked_fetch),
+        )
+        await service.start_refresh("quick")
+        assert service._refresh_task is not None
+        service._refresh_task.cancel()
+        try:
+            await service._refresh_task
+        except asyncio.CancelledError:
+            pass
+
+        assert service.get_refresh_state().status == "error"
+        assert service.storage.load_overview().refresh.status == "error"
 
     asyncio.run(scenario())
