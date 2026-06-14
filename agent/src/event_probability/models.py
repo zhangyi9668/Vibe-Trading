@@ -53,7 +53,7 @@ class RefreshState(BaseModel):
 
 
 class ProbabilitySnapshot(BaseModel):
-    as_of: str
+    as_of: str | None = None
     events: list[EventProbability] = Field(default_factory=list)
     sources: list[SourceStatus] = Field(default_factory=list)
     translation_cache_size: int = 0

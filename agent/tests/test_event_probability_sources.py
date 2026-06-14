@@ -1,4 +1,9 @@
-from src.event_probability import EventProbability, RefreshState, SourceStatus
+from src.event_probability import (
+    EventProbability,
+    ProbabilitySnapshot,
+    RefreshState,
+    SourceStatus,
+)
 
 
 def test_event_probability_wire_serialization() -> None:
@@ -65,3 +70,33 @@ def test_empty_source_status_defaults_as_of_to_none() -> None:
     status = SourceStatus(source="polymarket", status="empty")
 
     assert status.as_of is None
+
+
+def test_probability_snapshot_wire_defaults() -> None:
+    snapshot = ProbabilitySnapshot()
+
+    assert snapshot.as_of is None
+    assert snapshot.events == []
+    assert snapshot.sources == []
+    assert snapshot.translation_cache_size == 0
+    assert snapshot.refresh.status == "idle"
+
+
+def test_probability_snapshot_mutable_defaults_are_isolated() -> None:
+    first = ProbabilitySnapshot()
+    second = ProbabilitySnapshot()
+
+    first.events.append(
+        EventProbability(
+            question="Will event X happen?",
+            topic="other",
+            slug="event-x",
+            source="polymarket",
+        )
+    )
+    first.sources.append(SourceStatus(source="polymarket", status="ok"))
+    first.refresh.translation.pending = 1
+
+    assert second.events == []
+    assert second.sources == []
+    assert second.refresh.translation.pending == 0
