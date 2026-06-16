@@ -1,8 +1,6 @@
 import { useDeferredValue, useEffect, useState } from "react";
 import {
   AlertTriangle,
-  ChevronDown,
-  ChevronUp,
   Gauge,
   Loader2,
   RefreshCcw,
@@ -110,9 +108,8 @@ export function EventProbability() {
   const [keyword, setKeyword] = useState("");
   const deferredKeyword = useDeferredValue(keyword);
   const [source, setSource] = useState<ProbabilitySource | "all">("all");
-  const [topic, setTopic] = useState<ProbabilityTopic | "all">("all");
+  const [topic, setTopic] = useState<ProbabilityTopic>("monetary_policy");
   const [minChange, setMinChange] = useState("0");
-  const [expandedTokenId, setExpandedTokenId] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -163,6 +160,16 @@ export function EventProbability() {
     };
   }, [overview.refresh]);
 
+  const availableTopics = TOPIC_ORDER.filter((topicKey) =>
+    overview.events.some((row) => row.topic === topicKey),
+  );
+
+  useEffect(() => {
+    if (availableTopics.length > 0 && !availableTopics.includes(topic)) {
+      setTopic(availableTopics[0]);
+    }
+  }, [availableTopics, topic]);
+
   const filteredEvents = overview.events.filter((row) => {
     const normalizedKeyword = deferredKeyword.trim().toLowerCase();
     if (normalizedKeyword) {
@@ -181,7 +188,7 @@ export function EventProbability() {
     if (source !== "all" && row.source !== source) {
       return false;
     }
-    if (topic !== "all" && row.topic !== topic) {
+    if (row.topic !== topic) {
       return false;
     }
 
@@ -193,13 +200,7 @@ export function EventProbability() {
       }
     }
     return true;
-  });
-
-  const groupedEvents = TOPIC_ORDER.map((topicKey) => ({
-    topicKey,
-    label: TOPIC_LABELS[topicKey],
-    rows: filteredEvents.filter((row) => row.topic === topicKey),
-  })).filter((group) => group.rows.length > 0);
+  }).sort((left, right) => right.volume_24h - left.volume_24h);
 
   async function startRefresh(kind: "quick" | "full") {
     try {
@@ -273,6 +274,27 @@ export function EventProbability() {
           </div>
         </div>
 
+        <div className="border-b border-border/70 bg-background/70 px-6 py-4">
+          <div className="flex gap-2 overflow-x-auto pb-1" aria-label="事件模块">
+            {availableTopics.map((topicKey) => (
+              <button
+                key={topicKey}
+                type="button"
+                onClick={() => setTopic(topicKey)}
+                aria-pressed={topic === topicKey}
+                className={cn(
+                  "shrink-0 rounded-full border px-4 py-2 text-sm font-medium transition",
+                  topic === topicKey
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground",
+                )}
+              >
+                {TOPIC_LABELS[topicKey]}
+              </button>
+            ))}
+          </div>
+        </div>
+
         <div className="grid gap-3 border-b border-border/70 bg-background/70 px-6 py-4 md:grid-cols-4">
           <div className="md:col-span-2">
             <label htmlFor="event-search" className="mb-1 block text-xs font-medium text-muted-foreground">
@@ -304,28 +326,7 @@ export function EventProbability() {
               <option value="kalshi">Kalshi</option>
             </select>
           </div>
-          <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-1">
-            <div>
-              <label htmlFor="event-topic" className="mb-1 block text-xs font-medium text-muted-foreground">
-                模块
-              </label>
-              <select
-                id="event-topic"
-                aria-label="模块"
-                value={topic}
-                onChange={(event) =>
-                  setTopic(event.target.value as ProbabilityTopic | "all")
-                }
-                className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/20"
-              >
-                <option value="all">全部模块</option>
-                {TOPIC_ORDER.map((topicKey) => (
-                  <option key={topicKey} value={topicKey}>
-                    {TOPIC_LABELS[topicKey]}
-                  </option>
-                ))}
-              </select>
-            </div>
+          <div>
             <div>
               <label htmlFor="event-min-change" className="mb-1 block text-xs font-medium text-muted-foreground">
                 最小 24h 波动
@@ -358,28 +359,23 @@ export function EventProbability() {
         <div className="rounded-2xl border border-border/70 bg-card px-6 py-12 text-center text-sm text-muted-foreground">
           正在加载事件概率缓存…
         </div>
-      ) : groupedEvents.length === 0 ? (
+      ) : filteredEvents.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-border/70 bg-card px-6 py-12 text-center text-sm text-muted-foreground">
           当前筛选条件下没有可展示的事件
         </div>
       ) : (
-        groupedEvents.map((group) => (
-          <section key={group.topicKey} className="rounded-2xl border border-border/70 bg-card shadow-sm">
+          <section className="rounded-2xl border border-border/70 bg-card shadow-sm">
             <div className="flex items-center justify-between border-b border-border/70 px-5 py-4">
               <div>
-                <h2 className="text-lg font-semibold">{group.label}</h2>
+                <h2 className="text-lg font-semibold">{TOPIC_LABELS[topic]}</h2>
                 <p className="text-xs text-muted-foreground">
-                  {group.rows.length} 个事件
+                  按 24h 成交额排序 · {filteredEvents.length} 个事件
                 </p>
               </div>
             </div>
 
             <div className="divide-y divide-border/60">
-              {group.rows.map((row) => {
-                const isExpanded = expandedTokenId === row.token_id_yes;
-                const canExpandTrend =
-                  row.source === "polymarket" && Boolean(row.token_id_yes);
-                return (
+              {filteredEvents.map((row, index) => (
                   <article key={`${row.source}-${row.slug}`} className="px-5 py-4">
                     <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                       <div className="min-w-0 flex-1 space-y-2">
@@ -393,6 +389,9 @@ export function EventProbability() {
                             )}
                           >
                             {row.source}
+                          </span>
+                          <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
+                            成交额 #{index + 1}
                           </span>
                           {row.series_ticker ? (
                             <span className="rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground">
@@ -468,38 +467,15 @@ export function EventProbability() {
                       </div>
                     </div>
 
-                    {canExpandTrend ? (
-                      <div className="mt-3">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setExpandedTokenId((current) =>
-                              current === row.token_id_yes ? null : row.token_id_yes,
-                            )
-                          }
-                          className="inline-flex items-center gap-2 rounded-full border border-border bg-background px-3 py-1.5 text-sm font-medium transition hover:bg-muted"
-                        >
-                          {isExpanded ? (
-                            <ChevronUp className="h-4 w-4" />
-                          ) : (
-                            <ChevronDown className="h-4 w-4" />
-                          )}
-                          查看趋势
-                        </button>
-                      </div>
-                    ) : null}
-
-                    {isExpanded && row.token_id_yes ? (
+                    {row.source === "polymarket" && row.token_id_yes ? (
                       <div className="mt-4 rounded-2xl border border-border/70 bg-background/70 p-4">
                         <ProbabilityTrend tokenId={row.token_id_yes} />
                       </div>
                     ) : null}
                   </article>
-                );
-              })}
+              ))}
             </div>
           </section>
-        ))
       )}
 
       <footer className="pb-6 text-center text-xs tracking-wide text-muted-foreground">

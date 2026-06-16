@@ -160,7 +160,7 @@ describe("EventProbability", () => {
     cleanup();
   });
 
-  it("renders grouped sections with chinese titles and english fallback", async () => {
+  it("renders the highest-volume default topic with chinese titles", async () => {
     renderPage();
 
     expect(
@@ -168,34 +168,37 @@ describe("EventProbability", () => {
     ).toBeTruthy();
     expect(screen.getByText("美联储会降息吗？")).toBeTruthy();
     expect(screen.getByText("Will the Fed cut rates?")).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "AI 科技" })).toBeTruthy();
-    expect(screen.getByText("OpenAI release this quarter?")).toBeTruthy();
+    expect(screen.queryByText("CPI 本月会回落吗？")).toBeNull();
+    expect(screen.queryByText("OpenAI release this quarter?")).toBeNull();
   });
 
-  it("filters by keyword, source, module and absolute change", async () => {
+  it("switches topics with the top tab buttons", async () => {
     renderPage();
     const user = userEvent.setup();
     await screen.findByText("美联储会降息吗？");
 
-    await user.type(screen.getByLabelText("搜索"), "CPI");
+    await user.click(screen.getByRole("button", { name: "宏观经济" }));
     expect(screen.getByText("CPI 本月会回落吗？")).toBeTruthy();
     expect(screen.queryByText("美联储会降息吗？")).toBeNull();
 
-    await user.clear(screen.getByLabelText("搜索"));
-    await user.selectOptions(screen.getByLabelText("来源"), "polymarket");
+    await user.click(screen.getByRole("button", { name: "AI 科技" }));
+    expect(screen.getByText("OpenAI release this quarter?")).toBeTruthy();
+  });
+
+  it("filters the selected topic by keyword, source and absolute change", async () => {
+    renderPage();
+    const user = userEvent.setup();
+    await screen.findByText("美联储会降息吗？");
+
+    await user.type(screen.getByLabelText("搜索"), "Fed");
     expect(screen.getByText("美联储会降息吗？")).toBeTruthy();
-    expect(screen.queryByText("CPI 本月会回落吗？")).toBeNull();
+
+    await user.selectOptions(screen.getByLabelText("来源"), "kalshi");
+    expect(screen.queryByText("美联储会降息吗？")).toBeNull();
 
     await user.selectOptions(screen.getByLabelText("来源"), "all");
-    await user.selectOptions(screen.getByLabelText("模块"), "ai_technology");
-    expect(screen.getByText("OpenAI release this quarter?")).toBeTruthy();
-    expect(screen.queryByText("美联储会降息吗？")).toBeNull();
-
-    await user.selectOptions(screen.getByLabelText("模块"), "all");
     await user.selectOptions(screen.getByLabelText("最小 24h 波动"), "0.02");
     expect(screen.getByText("美联储会降息吗？")).toBeTruthy();
-    expect(screen.getByText("CPI 本月会回落吗？")).toBeTruthy();
-    expect(screen.queryByText("OpenAI release this quarter?")).toBeNull();
   });
 
   it(
@@ -250,16 +253,12 @@ describe("EventProbability", () => {
     10000,
   );
 
-  it("shows trend toggle only for polymarket rows with token id", async () => {
+  it("shows polymarket trend immediately without a toggle", async () => {
     renderPage();
-    const user = userEvent.setup();
     await screen.findByText("美联储会降息吗？");
 
-    const trendButton = screen.getByRole("button", { name: "查看趋势" });
-    await user.click(trendButton);
     expect(screen.getByTestId("probability-trend").textContent).toContain("fed-yes");
-    expect(screen.getByRole("button", { name: "查看趋势" })).toBeTruthy();
-    expect(screen.queryByText("KXCPI")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "查看趋势" })).toBeNull();
   });
 
   it("renders footer disclaimer", async () => {

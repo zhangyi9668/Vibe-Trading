@@ -18,13 +18,13 @@ TOPIC_ORDER = (
 )
 
 MODULE_CAPS = {
-    "monetary_policy": 20,
-    "macro_economy": 20,
-    "geopolitics": 24,
-    "political_elections": 20,
-    "indices_commodities": 20,
-    "ai_technology": 16,
-    "crypto": 12,
+    "monetary_policy": 8,
+    "macro_economy": 8,
+    "geopolitics": 8,
+    "political_elections": 8,
+    "indices_commodities": 8,
+    "ai_technology": 8,
+    "crypto": 8,
     "sports": 8,
     "entertainment": 8,
     "other": 8,

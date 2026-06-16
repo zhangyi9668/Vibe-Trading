@@ -54,6 +54,32 @@ def test_topic_caps_keep_highest_volume_rows_in_topic_order() -> None:
     assert [row.volume_24h for row in limited[1:]] == [19.0, 18.0, 17.0]
 
 
+def test_default_topic_cap_keeps_only_top_eight_by_volume() -> None:
+    rows = [
+        EventProbability(
+            question=f"rates-{index}",
+            topic="monetary_policy",
+            source="polymarket",
+            slug=f"rates-{index}",
+            volume_24h=float(index),
+        )
+        for index in range(12)
+    ]
+
+    limited = limit_by_topic(rows)
+
+    assert [row.volume_24h for row in limited] == [
+        11.0,
+        10.0,
+        9.0,
+        8.0,
+        7.0,
+        6.0,
+        5.0,
+        4.0,
+    ]
+
+
 def test_unknown_topics_are_kept_in_other() -> None:
     row = EventProbability(
         question="unknown",

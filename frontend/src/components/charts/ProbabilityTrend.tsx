@@ -9,11 +9,35 @@ interface ProbabilityTrendProps {
 }
 
 export function ProbabilityTrend({ tokenId }: ProbabilityTrendProps) {
+  const visibilityRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const [visible, setVisible] = useState(
+    () => typeof IntersectionObserver === "undefined",
+  );
   const [points, setPoints] = useState<Array<{ t: number; p: number }> | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (visible || !visibilityRef.current) {
+      return;
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setVisible(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: "300px 0px" },
+    );
+    observer.observe(visibilityRef.current);
+    return () => observer.disconnect();
+  }, [visible]);
+
+  useEffect(() => {
+    if (!visible) {
+      return;
+    }
     let alive = true;
     setError(null);
     setPoints(null);
@@ -32,7 +56,7 @@ export function ProbabilityTrend({ tokenId }: ProbabilityTrendProps) {
     return () => {
       alive = false;
     };
-  }, [tokenId]);
+  }, [tokenId, visible]);
 
   useEffect(() => {
     if (!containerRef.current || !points || points.length === 0) {
@@ -106,6 +130,17 @@ export function ProbabilityTrend({ tokenId }: ProbabilityTrendProps) {
       chart.dispose();
     };
   }, [points]);
+
+  if (!visible) {
+    return (
+      <div
+        ref={visibilityRef}
+        className="rounded-lg border border-border/70 bg-background/70 px-4 py-6 text-sm text-muted-foreground"
+      >
+        趋势图将在进入屏幕时加载
+      </div>
+    );
+  }
 
   if (error) {
     return (

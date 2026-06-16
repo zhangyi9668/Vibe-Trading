@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -89,6 +90,46 @@ def test_missing_codex_token_raises_login_hint(monkeypatch: pytest.MonkeyPatch) 
 
     with pytest.raises(RuntimeError, match="vibe-trading provider login openai-codex"):
         adapter._headers()
+
+
+def test_stale_oauth_cache_falls_back_to_codex_cli_auth(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    oauth_cli_kit = pytest.importorskip("oauth_cli_kit")
+    auth_path = tmp_path / ".codex" / "auth.json"
+    auth_path.parent.mkdir()
+    auth_path.write_text(
+        json.dumps(
+            {
+                "tokens": {
+                    "access_token": "current-access",
+                    "refresh_token": "current-refresh",
+                    "account_id": "account-123",
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    calls: list[object | None] = []
+
+    def fake_get_token(*, storage=None):
+        calls.append(storage)
+        if storage is None:
+            raise RuntimeError("stale cache refresh failed")
+        token = storage.load()
+        assert token is not None
+        return token
+
+    monkeypatch.setattr(oauth_cli_kit, "get_token", fake_get_token)
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path))
+
+    adapter = OpenAICodexLLM(model=DEFAULT_CODEX_MODEL)
+
+    assert adapter._headers()["chatgpt-account-id"] == "account-123"
+    assert len(calls) == 2
+    assert calls[1] is not None
 
 
 def test_sse_events_parse_text_and_function_calls() -> None:
