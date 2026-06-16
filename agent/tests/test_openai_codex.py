@@ -30,7 +30,7 @@ def test_event_translation_model_defaults_to_compatible_codex_model(
     monkeypatch.delenv("EVENT_PROBABILITY_TRANSLATION_MODEL", raising=False)
     monkeypatch.setenv("LANGCHAIN_MODEL_NAME", DEFAULT_CODEX_MODEL)
 
-    assert DEFAULT_EVENT_TRANSLATION_MODEL == "openai-codex/gpt-5.2-codex"
+    assert DEFAULT_EVENT_TRANSLATION_MODEL == "openai-codex/gpt-5.4-mini"
     assert get_event_translation_model() == DEFAULT_EVENT_TRANSLATION_MODEL
     assert get_event_translation_model() != DEFAULT_CODEX_MODEL
 
