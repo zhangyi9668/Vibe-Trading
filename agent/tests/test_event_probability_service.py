@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock
 
 from src.event_probability.models import (
     EventProbability,
+    EventProbabilityResult,
     ProbabilitySnapshot,
     TranslationStats,
 )
@@ -232,3 +233,39 @@ def test_cancelled_refresh_persists_terminal_state(tmp_path: Path) -> None:
         assert service.storage.load_overview().refresh.status == "error"
 
     asyncio.run(scenario())
+
+
+def test_prepare_rows_keeps_parent_groups_and_ranks_by_total_volume() -> None:
+    parents = [
+        EventProbability(
+            question=f"Fed decision parent {index}",
+            topic="other",
+            event_id=f"parent-{index}",
+            results=[
+                EventProbabilityResult(
+                    label=f"Outcome {index}-{child}",
+                    volume_24h=float(child),
+                )
+                for child in range(3)
+            ],
+            source="polymarket",
+            slug="shared-parent-slug",
+            source_category="Economics",
+            volume_24h=float(index * 100),
+        )
+        for index in range(1, 10)
+    ]
+
+    prepared = EventProbabilityService._prepare_rows(parents)
+
+    assert [row.event_id for row in prepared] == [
+        "parent-9",
+        "parent-8",
+        "parent-7",
+        "parent-6",
+        "parent-5",
+        "parent-4",
+        "parent-3",
+        "parent-2",
+    ]
+    assert all(len(row.results) == 3 for row in prepared)

@@ -11,15 +11,40 @@ import pytest
 from src.providers import llm as llm_mod
 from src.providers.openai_codex import (
     DEFAULT_CODEX_URL,
+    DEFAULT_EVENT_TRANSLATION_MODEL,
     OpenAICodexLLM,
     _events_from_lines,
     _message_chunks_from_events,
     _strip_model_prefix,
+    get_event_translation_model,
     validate_codex_base_url,
 )
 
 
 DEFAULT_CODEX_MODEL = "openai-codex/gpt-5.3-codex"
+
+
+def test_event_translation_model_defaults_to_compatible_codex_model(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("EVENT_PROBABILITY_TRANSLATION_MODEL", raising=False)
+    monkeypatch.setenv("LANGCHAIN_MODEL_NAME", DEFAULT_CODEX_MODEL)
+
+    assert DEFAULT_EVENT_TRANSLATION_MODEL == "openai-codex/gpt-5.2-codex"
+    assert get_event_translation_model() == DEFAULT_EVENT_TRANSLATION_MODEL
+    assert get_event_translation_model() != DEFAULT_CODEX_MODEL
+
+
+def test_event_translation_model_allows_environment_override(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(
+        "EVENT_PROBABILITY_TRANSLATION_MODEL",
+        "openai-codex/custom-translation-model",
+    )
+    monkeypatch.setenv("LANGCHAIN_MODEL_NAME", DEFAULT_CODEX_MODEL)
+
+    assert get_event_translation_model() == "openai-codex/custom-translation-model"
 
 
 def test_provider_default_model_matches_live_codex_account_path() -> None:

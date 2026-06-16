@@ -70,10 +70,21 @@ export type ProbabilityTopic =
   | "entertainment"
   | "other";
 
+export interface EventProbabilityResult {
+  label: string;
+  label_zh: string | null;
+  probability: number | null;
+  change_24h: number | null;
+  volume_24h: number;
+  token_id: string | null;
+}
+
 export interface EventProbability {
   question: string;
   question_zh: string | null;
   topic: ProbabilityTopic;
+  event_id: string | null;
+  results: EventProbabilityResult[];
   outcomes: string[];
   prices: Array<number | null>;
   prob_yes: number | null;
@@ -122,6 +133,18 @@ export interface ProbabilityOverview {
   sources: ProbabilitySourceStatus[];
   translation_cache_size: number;
   refresh: ProbabilityRefreshState;
+}
+
+export interface ProbabilityHistorySeriesRequest {
+  label: string;
+  token_id: string;
+}
+
+export interface ProbabilityHistorySeries {
+  label: string;
+  token_id: string;
+  points: Array<{ t: number; p: number }>;
+  error: string | null;
 }
 
 async function uploadFile(file: File): Promise<UploadResult> {
@@ -217,6 +240,11 @@ export const api = {
     request<Array<{ t: number; p: number }>>(
       `/event-probability/history/${encodeURIComponent(tokenId)}`,
     ),
+  getEventProbabilityHistories: (series: ProbabilityHistorySeriesRequest[]) =>
+    request<ProbabilityHistorySeries[]>("/event-probability/history", {
+      method: "POST",
+      body: JSON.stringify({ series }),
+    }),
 
   // Alpha Zoo API
   listAlphas: (params: AlphaListParams = {}) => {

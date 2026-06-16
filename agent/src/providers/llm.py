@@ -200,7 +200,7 @@ def _normalize_ollama_base_url(base_url: str) -> str:
     return f"{url}/v1"
 
 
-def _sync_provider_env() -> None:
+def _sync_provider_env(provider: str | None = None) -> None:
     """Map provider-specific env vars to OPENAI_* for ChatOpenAI.
 
     Each entry: provider_name -> (api_key_env, base_url_env).
@@ -208,9 +208,11 @@ def _sync_provider_env() -> None:
     api_key_env=None means no key required (e.g. Ollama local).
     """
     _ensure_dotenv()
-    provider = os.getenv("LANGCHAIN_PROVIDER", "openai").lower()
+    provider_name = (
+        provider or os.getenv("LANGCHAIN_PROVIDER", "openai")
+    ).lower()
 
-    if provider in {"openai-codex", "openai_codex"}:
+    if provider_name in {"openai-codex", "openai_codex"}:
         codex_url = os.getenv("OPENAI_CODEX_BASE_URL", "https://chatgpt.com/backend-api/codex/responses")
         os.environ["OPENAI_API_BASE"] = codex_url
         os.environ["OPENAI_BASE_URL"] = codex_url
@@ -234,7 +236,7 @@ def _sync_provider_env() -> None:
         "ollama":     (None,                  "OLLAMA_BASE_URL"),
     }
 
-    spec = _PROVIDER_MAP.get(provider, _PROVIDER_MAP["openai"])
+    spec = _PROVIDER_MAP.get(provider_name, _PROVIDER_MAP["openai"])
     key_env, base_env = spec
 
     # Resolve API key: provider-specific env → OPENAI_API_KEY fallback
@@ -245,7 +247,7 @@ def _sync_provider_env() -> None:
 
     # Resolve base URL: provider-specific env → OPENAI_BASE_URL fallback
     base_url = os.getenv(base_env, "") or os.getenv("OPENAI_BASE_URL", "") or os.getenv("OPENAI_API_BASE", "")
-    if provider == "ollama" and base_url:
+    if provider_name == "ollama" and base_url:
         base_url = _normalize_ollama_base_url(base_url)
 
     if api_key:
@@ -255,12 +257,18 @@ def _sync_provider_env() -> None:
         os.environ.setdefault("OPENAI_BASE_URL", base_url)
 
 
-def build_llm(*, model_name: Optional[str] = None, callbacks: Any = None) -> Any:
+def build_llm(
+    *,
+    model_name: Optional[str] = None,
+    callbacks: Any = None,
+    provider: str | None = None,
+) -> Any:
     """Construct a ChatOpenAI instance.
 
     Args:
         model_name: Model name; defaults to LANGCHAIN_MODEL_NAME.
         callbacks: Optional LangChain callbacks.
+        provider: Optional provider override for this construction.
 
     Returns:
         ChatOpenAI instance.
@@ -268,13 +276,20 @@ def build_llm(*, model_name: Optional[str] = None, callbacks: Any = None) -> Any
     Raises:
         RuntimeError: If langchain-openai is missing or LANGCHAIN_MODEL_NAME is unset.
     """
-    _sync_provider_env()
+    _ensure_dotenv()
+    provider_name = (
+        provider or os.getenv("LANGCHAIN_PROVIDER", "openai")
+    ).lower()
+    if not (
+        provider is not None
+        and provider_name in {"openai-codex", "openai_codex"}
+    ):
+        _sync_provider_env(provider_name)
     name = model_name or os.getenv("LANGCHAIN_MODEL_NAME", "").strip()
     if not name:
         raise RuntimeError("LANGCHAIN_MODEL_NAME is not set")
     temperature = float(os.getenv("LANGCHAIN_TEMPERATURE", "0.0"))
-    provider = os.getenv("LANGCHAIN_PROVIDER", "openai").lower()
-    if provider in {"openai-codex", "openai_codex"}:
+    if provider_name in {"openai-codex", "openai_codex"}:
         from src.providers.openai_codex import OpenAICodexLLM
 
         effort = os.getenv("LANGCHAIN_REASONING_EFFORT", "").strip().lower()
@@ -289,7 +304,7 @@ def build_llm(*, model_name: Optional[str] = None, callbacks: Any = None) -> Any
         raise RuntimeError("langchain-openai is not installed")
     # MiniMax requires temperature in (0.0, 1.0] — clamp to 0.01 when the
     # default 0.0 is used to avoid an API validation error.
-    if provider == "minimax" and temperature <= 0.0:
+    if provider_name == "minimax" and temperature <= 0.0:
         temperature = 0.01
     # Optional reasoning activation for relays requiring opt-in (e.g. OpenRouter).
     # Moonshot/DeepSeek official APIs emit reasoning by default and ignore this field.
@@ -302,4 +317,3 @@ def build_llm(*, model_name: Optional[str] = None, callbacks: Any = None) -> Any
         callbacks=callbacks,
         extra_body={"reasoning": {"effort": effort}} if effort else None,
     )
-

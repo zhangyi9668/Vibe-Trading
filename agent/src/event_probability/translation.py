@@ -4,6 +4,7 @@ from collections.abc import Awaitable, Callable, Sequence
 from typing import Any
 
 from src.providers.chat import ChatLLM
+from src.providers.openai_codex import get_event_translation_model
 
 from .models import EventProbability, TranslationStats
 from .storage import ProbabilityStorage
@@ -11,6 +12,39 @@ from .storage import ProbabilityStorage
 
 TranslateBatch = Callable[[list[str]], Awaitable[dict[str, str]]]
 Sleep = Callable[[float], Awaitable[Any]]
+
+
+def _parse_translation_response(
+    content: str | None,
+    titles: Sequence[str],
+) -> dict[str, str]:
+    if not isinstance(content, str):
+        return {}
+
+    text = content.strip()
+    lines = text.splitlines()
+    if (
+        len(lines) >= 3
+        and lines[0].strip() == "```json"
+        and lines[-1].strip() == "```"
+    ):
+        text = "\n".join(lines[1:-1]).strip()
+
+    try:
+        parsed = json.loads(text)
+    except json.JSONDecodeError:
+        return {}
+    if not isinstance(parsed, dict):
+        return {}
+
+    requested = set(titles)
+    return {
+        key: value
+        for key, value in parsed.items()
+        if isinstance(key, str)
+        and key in requested
+        and isinstance(value, str)
+    }
 
 
 class TitleTranslator:
@@ -46,18 +80,24 @@ class TitleTranslator:
             for title, translation in cache.items()
             if translation.strip()
         }
-        rows_by_title: dict[str, list[EventProbability]] = {}
+        targets_by_title: dict[str, list[tuple[Any, str]]] = {}
         for event in events:
-            rows_by_title.setdefault(event.question, []).append(event)
+            targets_by_title.setdefault(event.question, []).append(
+                (event, "question_zh")
+            )
+            for result in event.results:
+                targets_by_title.setdefault(result.label, []).append(
+                    (result, "label_zh")
+                )
 
         cache_hits = 0
         new_titles: list[str] = []
-        for title, rows in rows_by_title.items():
+        for title, targets in targets_by_title.items():
             cached = valid_cache.get(title)
             if cached:
                 cache_hits += 1
-                for row in rows:
-                    row.question_zh = cached
+                for target, attribute in targets:
+                    setattr(target, attribute, cached)
             else:
                 new_titles.append(title)
 
@@ -84,8 +124,8 @@ class TitleTranslator:
                         pass
                     translated_count += len(accepted)
                     for title, value in accepted.items():
-                        for row in rows_by_title[title]:
-                            row.question_zh = value
+                        for target, attribute in targets_by_title[title]:
+                            setattr(target, attribute, value)
             if start + batch_size < len(selected) and batch_delay:
                 await self.sleep(batch_delay)
 
@@ -110,7 +150,10 @@ class TitleTranslator:
         )
 
         def call() -> str | None:
-            response = ChatLLM().chat(
+            response = ChatLLM(
+                model_name=get_event_translation_model(),
+                provider="openai-codex",
+            ).chat(
                 [{"role": "user", "content": prompt}],
                 tools=None,
                 timeout=45,
@@ -120,11 +163,4 @@ class TitleTranslator:
         content = await asyncio.to_thread(call)
         if not content:
             return {}
-        parsed = json.loads(content)
-        if not isinstance(parsed, dict):
-            return {}
-        return {
-            key: value
-            for key, value in parsed.items()
-            if key in titles and isinstance(value, str)
-        }
+        return _parse_translation_response(content, titles)

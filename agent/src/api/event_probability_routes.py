@@ -5,6 +5,7 @@ from typing import Any
 
 from fastapi import Depends, FastAPI, HTTPException, status
 
+from src.event_probability.models import ProbabilityHistoryRequest
 from src.event_probability.service import EventProbabilityService
 
 
@@ -74,6 +75,24 @@ def register_event_probability_routes(
             return _get_service().get_refresh_state()
         except Exception as exc:
             raise _internal_error("refresh status", exc) from exc
+
+    @app.post(
+        "/event-probability/history",
+        dependencies=[Depends(require_auth)],
+    )
+    async def get_event_probability_histories(request: ProbabilityHistoryRequest):
+        if not 1 <= len(request.series) <= 5:
+            raise HTTPException(
+                status_code=400,
+                detail="series count must be 1..5",
+            )
+        for item in request.series:
+            if not _TOKEN_ID_RE.fullmatch(item.token_id or ""):
+                raise HTTPException(status_code=400, detail="invalid token_id")
+        try:
+            return await _get_service().get_histories(request.series)
+        except Exception as exc:
+            raise _internal_error("history", exc) from exc
 
     @app.get(
         "/event-probability/history/{token_id}",

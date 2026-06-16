@@ -10,11 +10,13 @@ from .kalshi import (
 )
 from .models import (
     EventProbability,
+    ProbabilityHistorySeries,
+    ProbabilityHistorySeriesRequest,
     ProbabilitySnapshot,
     RefreshState,
     SourceStatus,
 )
-from .polymarket import fetch_history, fetch_markets
+from .polymarket import fetch_histories, fetch_history, fetch_markets
 from .storage import ProbabilityStorage
 from .taxonomy import classify, limit_by_topic
 from .translation import TitleTranslator
@@ -76,6 +78,15 @@ class EventProbabilityService:
 
     async def get_history(self, token_id: str) -> list[dict[str, float | int]]:
         return await self.history_fetch(token_id)
+
+    async def get_histories(
+        self,
+        series: Sequence[ProbabilityHistorySeriesRequest],
+    ) -> list[ProbabilityHistorySeries]:
+        histories = await fetch_histories(series, history_fetch=self.history_fetch)
+        if all(item.error is not None for item in histories):
+            raise RuntimeError("all probability history series failed")
+        return histories
 
     async def _run_refresh(self, kind: RefreshKind) -> None:
         started_at = _now()
@@ -259,15 +270,20 @@ class EventProbabilityService:
     def _prepare_rows(
         rows: Sequence[EventProbability],
     ) -> list[EventProbability]:
-        deduplicated: dict[tuple[str, str], EventProbability] = {}
+        deduplicated: dict[tuple[str, str, str], EventProbability] = {}
         for row in rows:
-            identity = row.slug or " ".join(row.question.lower().split())
+            identity_kind = "event" if row.event_id is not None else "market"
+            identity = (
+                row.event_id
+                if row.event_id is not None
+                else row.slug or " ".join(row.question.lower().split())
+            )
             updated = row.model_copy(
                 update={
                     "topic": classify(row.question, row.source_category),
                 }
             )
-            key = (updated.source, identity)
+            key = (updated.source, identity_kind, identity)
             current = deduplicated.get(key)
             if current is None or updated.volume_24h > current.volume_24h:
                 deduplicated[key] = updated

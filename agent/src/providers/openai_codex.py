@@ -26,6 +26,14 @@ except ImportError:
 
 DEFAULT_CODEX_URL = "https://chatgpt.com/backend-api/codex/responses"
 DEFAULT_ORIGINATOR = "vibe-trading"
+DEFAULT_EVENT_TRANSLATION_MODEL = "openai-codex/gpt-5.2-codex"
+
+
+def get_event_translation_model() -> str:
+    return (
+        os.getenv("EVENT_PROBABILITY_TRANSLATION_MODEL", "").strip()
+        or DEFAULT_EVENT_TRANSLATION_MODEL
+    )
 
 
 @dataclass

@@ -1,21 +1,58 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
-import { api } from "@/lib/api";
+import {
+  api,
+  type ProbabilityHistorySeries,
+  type ProbabilityHistorySeriesRequest,
+} from "@/lib/api";
 import { echarts } from "@/lib/echarts";
 import { getChartTheme } from "@/lib/chart-theme";
 
 interface ProbabilityTrendProps {
-  tokenId: string;
+  series: ProbabilityHistorySeriesRequest[];
 }
 
-export function ProbabilityTrend({ tokenId }: ProbabilityTrendProps) {
+const LINE_COLORS = ["#8BC1FF", "#2D9CFF", "#FFC21A", "#FF861A", "#B78CFF"];
+
+function formatPointValue(value: number): number {
+  return Number((value * 100).toFixed(2));
+}
+
+function latestProbability(points: Array<{ t: number; p: number }>): number {
+  return points.reduce((latest, point) => (point.t >= latest.t ? point : latest)).p;
+}
+
+function buildSeriesKey(series: ProbabilityHistorySeriesRequest[]): string {
+  return JSON.stringify(
+    series
+      .slice(0, 5)
+      .map(({ label, token_id }) => ({ label, token_id })),
+  );
+}
+
+export function ProbabilityTrend({ series }: ProbabilityTrendProps) {
+  const requestSeriesKey = buildSeriesKey(series);
+  const requestSeries = useMemo(
+    () => JSON.parse(requestSeriesKey) as ProbabilityHistorySeriesRequest[],
+    [requestSeriesKey],
+  );
   const visibilityRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(
     () => typeof IntersectionObserver === "undefined",
   );
-  const [points, setPoints] = useState<Array<{ t: number; p: number }> | null>(null);
+  const [histories, setHistories] = useState<ProbabilityHistorySeries[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const successfulHistories = useMemo(
+    () =>
+      histories?.filter((history) => !history.error && history.points.length > 0) ??
+      [],
+    [histories],
+  );
+  const hasPartialError =
+    histories !== null &&
+    successfulHistories.length > 0 &&
+    histories.some((history) => history.error);
 
   useEffect(() => {
     if (visible || !visibilityRef.current) {
@@ -32,20 +69,24 @@ export function ProbabilityTrend({ tokenId }: ProbabilityTrendProps) {
     );
     observer.observe(visibilityRef.current);
     return () => observer.disconnect();
-  }, [visible]);
+  }, [requestSeries.length, visible]);
 
   useEffect(() => {
     if (!visible) {
       return;
     }
+    if (requestSeries.length === 0) {
+      setHistories([]);
+      return;
+    }
     let alive = true;
     setError(null);
-    setPoints(null);
+    setHistories(null);
     api
-      .getEventProbabilityHistory(tokenId)
+      .getEventProbabilityHistories(requestSeries)
       .then((rows) => {
         if (alive) {
-          setPoints(rows);
+          setHistories(rows);
         }
       })
       .catch((err: unknown) => {
@@ -56,30 +97,39 @@ export function ProbabilityTrend({ tokenId }: ProbabilityTrendProps) {
     return () => {
       alive = false;
     };
-  }, [tokenId, visible]);
+  }, [requestSeries, visible]);
 
   useEffect(() => {
-    if (!containerRef.current || !points || points.length === 0) {
+    if (!containerRef.current || successfulHistories.length === 0) {
       return;
     }
 
+    const timestamps = Array.from(
+      new Set(successfulHistories.flatMap((history) => history.points.map((point) => point.t))),
+    ).sort((left, right) => left - right);
     const theme = getChartTheme();
     const chart = echarts.init(containerRef.current);
     chart.setOption({
       backgroundColor: "transparent",
       animationDuration: 500,
-      grid: { left: 36, right: 20, top: 20, bottom: 30 },
+      grid: { left: 36, right: 20, top: 52, bottom: 30 },
+      legend: {
+        type: "scroll",
+        top: 0,
+        textStyle: { color: theme.textColor, fontSize: 12 },
+      },
       tooltip: {
         trigger: "axis",
         backgroundColor: theme.tooltipBg,
         borderColor: theme.tooltipBorder,
         textStyle: { color: theme.tooltipText, fontSize: 12 },
-        valueFormatter: (value: number) => `${value.toFixed(1)}%`,
+        valueFormatter: (value: number | null) =>
+          value === null ? "暂无数据" : `${value.toFixed(1)}%`,
       },
       xAxis: {
         type: "category",
-        data: points.map((point) =>
-          new Date(point.t * 1000).toLocaleDateString("zh-CN", {
+        data: timestamps.map((timestamp) =>
+          new Date(timestamp * 1000).toLocaleDateString("zh-CN", {
             month: "numeric",
             day: "numeric",
           }),
@@ -106,21 +156,23 @@ export function ProbabilityTrend({ tokenId }: ProbabilityTrendProps) {
           },
         },
       },
-      series: [
-        {
+      series: successfulHistories.map((history, index) => {
+        const pointsByTimestamp = new Map(
+          history.points.map((point) => [point.t, formatPointValue(point.p)]),
+        );
+        return {
+          name: `${history.label} ${(latestProbability(history.points) * 100).toFixed(1)}%`,
           type: "line",
           smooth: true,
           showSymbol: false,
+          connectNulls: false,
           lineStyle: {
             width: 2,
-            color: theme.infoColor,
+            color: LINE_COLORS[index],
           },
-          areaStyle: {
-            color: `${theme.infoColor}22`,
-          },
-          data: points.map((point) => Number((point.p * 100).toFixed(2))),
-        },
-      ],
+          data: timestamps.map((timestamp) => pointsByTimestamp.get(timestamp) ?? null),
+        };
+      }),
     });
 
     const resizeObserver = new ResizeObserver(() => chart.resize());
@@ -129,7 +181,15 @@ export function ProbabilityTrend({ tokenId }: ProbabilityTrendProps) {
       resizeObserver.disconnect();
       chart.dispose();
     };
-  }, [points]);
+  }, [successfulHistories]);
+
+  if (series.length === 0) {
+    return (
+      <div className="rounded-lg border border-dashed border-border/70 bg-background/60 px-4 py-6 text-sm text-muted-foreground">
+        暂无趋势数据
+      </div>
+    );
+  }
 
   if (!visible) {
     return (
@@ -150,7 +210,7 @@ export function ProbabilityTrend({ tokenId }: ProbabilityTrendProps) {
     );
   }
 
-  if (points === null) {
+  if (histories === null) {
     return (
       <div className="rounded-lg border border-border/70 bg-background/70 px-4 py-6 text-sm text-muted-foreground">
         正在加载趋势数据…
@@ -158,7 +218,14 @@ export function ProbabilityTrend({ tokenId }: ProbabilityTrendProps) {
     );
   }
 
-  if (points.length === 0) {
+  if (successfulHistories.length === 0) {
+    if (histories.some((history) => history.error)) {
+      return (
+        <div className="rounded-lg border border-danger/30 bg-danger/5 px-4 py-3 text-sm text-danger">
+          趋势数据加载失败
+        </div>
+      );
+    }
     return (
       <div className="rounded-lg border border-dashed border-border/70 bg-background/60 px-4 py-6 text-sm text-muted-foreground">
         暂无趋势数据
@@ -166,5 +233,14 @@ export function ProbabilityTrend({ tokenId }: ProbabilityTrendProps) {
     );
   }
 
-  return <div ref={containerRef} className="h-56 w-full" />;
+  return (
+    <div className="space-y-2">
+      {hasPartialError ? (
+        <div className="rounded-lg border border-warning/30 bg-warning/5 px-3 py-2 text-xs text-warning">
+          部分趋势数据不可用
+        </div>
+      ) : null}
+      <div ref={containerRef} className="h-72 w-full" />
+    </div>
+  );
 }

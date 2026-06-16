@@ -6,10 +6,42 @@ from pydantic import BaseModel, Field
 ProbabilitySource = Literal["polymarket", "kalshi"]
 
 
+class EventProbabilityResult(BaseModel):
+    label: str
+    label_zh: str | None = None
+    probability: float | None = None
+    change_24h: float | None = None
+    volume_24h: float = 0.0
+    token_id: str | None = None
+
+
+class ProbabilityHistorySeriesRequest(BaseModel):
+    label: str
+    token_id: str
+
+
+class ProbabilityHistoryRequest(BaseModel):
+    series: list[ProbabilityHistorySeriesRequest]
+
+
+class ProbabilityHistoryPoint(BaseModel):
+    t: int
+    p: float
+
+
+class ProbabilityHistorySeries(BaseModel):
+    label: str
+    token_id: str
+    points: list[ProbabilityHistoryPoint] = Field(default_factory=list)
+    error: str | None = None
+
+
 class EventProbability(BaseModel):
     question: str
     question_zh: str | None = None
     topic: str
+    event_id: str | None = None
+    results: list[EventProbabilityResult] = Field(default_factory=list)
     outcomes: list[str] = Field(default_factory=lambda: ["Yes", "No"])
     prices: list[float | None] = Field(default_factory=list)
     prob_yes: float | None = None

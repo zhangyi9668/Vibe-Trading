@@ -75,14 +75,19 @@ class ChatLLM:
         model_name: Model name.
     """
 
-    def __init__(self, model_name: Optional[str] = None) -> None:
+    def __init__(
+        self,
+        model_name: Optional[str] = None,
+        provider: Optional[str] = None,
+    ) -> None:
         """Initialize ChatLLM.
 
         Args:
             model_name: Model name; defaults to the environment variable value.
+            provider: Optional provider override for this client.
         """
         self.model_name = model_name
-        self._llm = build_llm(model_name=model_name)
+        self._llm = build_llm(model_name=model_name, provider=provider)
 
     def chat(self, messages: List[Dict[str, Any]], tools: Optional[List[Dict[str, Any]]] = None, timeout: Optional[int] = None) -> LLMResponse:
         """Call the LLM synchronously.

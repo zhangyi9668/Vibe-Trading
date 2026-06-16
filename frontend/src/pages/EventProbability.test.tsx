@@ -9,9 +9,79 @@ import type {
   ProbabilityRefreshState,
 } from "@/lib/api";
 
-const overview: ProbabilityOverview = {
+const overview = {
   as_of: "2026-06-14T00:00:00Z",
   events: [
+    {
+      question: "Who will win the 2028 Democratic presidential nomination?",
+      question_zh: "谁会赢得 2028 年民主党总统提名？",
+      topic: "political_elections",
+      outcomes: [],
+      prices: [],
+      prob_yes: null,
+      pick_label: null,
+      change_24h: null,
+      change_7d: null,
+      volume_24h: 4200000,
+      liquidity: 1600000,
+      end_date: "2028-08-20",
+      slug: "democratic-nomination-2028",
+      series_ticker: null,
+      token_id_yes: null,
+      event_id: "polymarket-parent-dem-2028",
+      source: "polymarket",
+      source_category: "Politics",
+      results: [
+        {
+          label: "Candidate E",
+          label_zh: "候选人 E",
+          probability: 0.27,
+          change_24h: 0.02,
+          volume_24h: 500000,
+          token_id: "winner-e",
+        },
+        {
+          label: "Candidate B",
+          label_zh: "候选人 B",
+          probability: 0.31,
+          change_24h: -0.01,
+          volume_24h: 900000,
+          token_id: "winner-b",
+        },
+        {
+          label: "Candidate F",
+          label_zh: "候选人 F",
+          probability: 0.06,
+          change_24h: -0.03,
+          volume_24h: 100000,
+          token_id: "winner-f",
+        },
+        {
+          label: "Candidate A",
+          label_zh: "候选人 A",
+          probability: 0.38,
+          change_24h: 0.04,
+          volume_24h: 1200000,
+          token_id: "winner-a",
+        },
+        {
+          label: "Candidate C",
+          label_zh: "候选人 C",
+          probability: 0.19,
+          change_24h: 0,
+          volume_24h: 750000,
+          token_id: "winner-c",
+        },
+        {
+          label: "Candidate D",
+          label_zh: "候选人 D",
+          probability: 0.12,
+          change_24h: -0.02,
+          volume_24h: 600000,
+          token_id: null,
+        },
+      ],
+    },
     {
       question: "Will the Fed cut rates?",
       question_zh: "美联储会降息吗？",
@@ -28,8 +98,10 @@ const overview: ProbabilityOverview = {
       slug: "fed-cut",
       series_ticker: null,
       token_id_yes: "fed-yes",
+      event_id: null,
       source: "polymarket",
       source_category: "Economy",
+      results: [],
     },
     {
       question: "Will CPI cool this month?",
@@ -47,8 +119,10 @@ const overview: ProbabilityOverview = {
       slug: "cpi-cool",
       series_ticker: "KXCPI",
       token_id_yes: null,
+      event_id: null,
       source: "kalshi",
       source_category: "Economics",
+      results: [],
     },
     {
       question: "OpenAI release this quarter?",
@@ -66,8 +140,10 @@ const overview: ProbabilityOverview = {
       slug: "openai-release",
       series_ticker: null,
       token_id_yes: null,
+      event_id: null,
       source: "kalshi",
       source_category: "Science and Technology",
+      results: [],
     },
   ],
   sources: [],
@@ -83,7 +159,7 @@ const overview: ProbabilityOverview = {
     error: null,
     translation: { new_translations: 0, cache_hits: 0, pending: 0 },
   },
-};
+} as ProbabilityOverview;
 
 let statusQueue: ProbabilityRefreshState[] = [];
 
@@ -105,9 +181,11 @@ vi.mock("@/lib/api", () => ({
 }));
 
 vi.mock("@/components/charts/ProbabilityTrend", () => ({
-  ProbabilityTrend: ({ tokenId }: { tokenId: string }) => (
-    <div data-testid="probability-trend">{tokenId}</div>
-  ),
+  ProbabilityTrend: ({
+    series,
+  }: {
+    series: Array<{ label: string; token_id: string }>;
+  }) => <div data-testid="probability-trend">{JSON.stringify(series)}</div>,
 }));
 
 function renderPage() {
@@ -185,6 +263,66 @@ describe("EventProbability", () => {
     expect(screen.getByText("OpenAI release this quarter?")).toBeTruthy();
   });
 
+  it("renders one grouped polymarket parent card with the top five results by volume", async () => {
+    const { container } = renderPage();
+    const user = userEvent.setup();
+    await screen.findByText("美联储会降息吗？");
+
+    await user.click(screen.getByRole("button", { name: "政治选举" }));
+
+    expect(
+      screen.getAllByText("谁会赢得 2028 年民主党总统提名？"),
+    ).toHaveLength(1);
+    expect(
+      screen.getByText("Who will win the 2028 Democratic presidential nomination?"),
+    ).toBeTruthy();
+    expect(container.querySelectorAll("article")).toHaveLength(1);
+
+    const text = container.textContent ?? "";
+    const orderedLabels = ["候选人 A", "候选人 B", "候选人 C", "候选人 D", "候选人 E"];
+    for (const label of orderedLabels) {
+      expect(screen.getByText(label)).toBeTruthy();
+    }
+    expect(text.indexOf("候选人 A")).toBeLessThan(text.indexOf("候选人 B"));
+    expect(text.indexOf("候选人 B")).toBeLessThan(text.indexOf("候选人 C"));
+    expect(text.indexOf("候选人 C")).toBeLessThan(text.indexOf("候选人 D"));
+    expect(text.indexOf("候选人 D")).toBeLessThan(text.indexOf("候选人 E"));
+    expect(screen.queryByText("候选人 F")).toBeNull();
+
+    for (const label of ["Candidate A", "Candidate B", "Candidate C", "Candidate D", "Candidate E"]) {
+      expect(screen.getByText(label)).toBeTruthy();
+    }
+    expect(screen.queryByText("Candidate F")).toBeNull();
+
+    for (const value of ["38.0%", "31.0%", "19.0%", "12.0%", "27.0%"]) {
+      expect(screen.getByText(value)).toBeTruthy();
+    }
+    for (const value of ["+4.0%", "-1.0%", "0.0%", "-2.0%", "+2.0%"]) {
+      expect(screen.getByText(value)).toBeTruthy();
+    }
+    for (const value of ["120万", "90万", "75万", "60万", "50万"]) {
+      expect(screen.getByText(value)).toBeTruthy();
+    }
+  });
+
+  it("passes grouped polymarket result series to the trend chart", async () => {
+    renderPage();
+    const user = userEvent.setup();
+    await screen.findByText("美联储会降息吗？");
+
+    await user.click(screen.getByRole("button", { name: "政治选举" }));
+
+    const series = JSON.parse(screen.getByTestId("probability-trend").textContent ?? "[]");
+    expect(series).toEqual([
+      { label: "候选人 A", token_id: "winner-a" },
+      { label: "候选人 B", token_id: "winner-b" },
+      { label: "候选人 C", token_id: "winner-c" },
+      { label: "候选人 E", token_id: "winner-e" },
+    ]);
+    expect(screen.getByText("候选人 D")).toBeTruthy();
+    expect(JSON.stringify(series)).not.toContain("候选人 D");
+  });
+
   it("filters the selected topic by keyword, source and absolute change", async () => {
     renderPage();
     const user = userEvent.setup();
@@ -253,11 +391,12 @@ describe("EventProbability", () => {
     10000,
   );
 
-  it("shows polymarket trend immediately without a toggle", async () => {
+  it("passes ungrouped polymarket as a single trend series without a toggle", async () => {
     renderPage();
     await screen.findByText("美联储会降息吗？");
 
-    expect(screen.getByTestId("probability-trend").textContent).toContain("fed-yes");
+    const series = JSON.parse(screen.getByTestId("probability-trend").textContent ?? "[]");
+    expect(series).toEqual([{ label: "Yes", token_id: "fed-yes" }]);
     expect(screen.queryByRole("button", { name: "查看趋势" })).toBeNull();
   });
 

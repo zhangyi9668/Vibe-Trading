@@ -133,6 +133,38 @@ class TestSyncProviderEnv:
         assert "minimax.io" in result["OPENAI_BASE_URL"]
 
 
+def test_build_llm_provider_override_uses_codex_without_mutating_global_provider(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import src.providers.llm as llm_mod
+    from src.providers.openai_codex import OpenAICodexLLM
+
+    llm_mod._dotenv_loaded = True
+    monkeypatch.setenv("LANGCHAIN_PROVIDER", "openrouter")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "or-test")
+    monkeypatch.setenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
+    original_openai_env = {
+        "OPENAI_API_KEY": "sk-main-provider",
+        "OPENAI_BASE_URL": "https://api.main-provider.example/v1",
+        "OPENAI_API_BASE": "https://api.main-provider.example/v1-legacy",
+    }
+    for key, value in original_openai_env.items():
+        monkeypatch.setenv(key, value)
+
+    adapter = build_llm(
+        model_name="openai-codex/gpt-5.2-codex",
+        provider="openai-codex",
+    )
+
+    assert isinstance(adapter, OpenAICodexLLM)
+    assert adapter.model == "openai-codex/gpt-5.2-codex"
+    assert os.environ["LANGCHAIN_PROVIDER"] == "openrouter"
+    assert {
+        key: os.environ.get(key)
+        for key in original_openai_env
+    } == original_openai_env
+
+
 # ---------------------------------------------------------------------------
 # MiniMax temperature clamping
 # ---------------------------------------------------------------------------
@@ -237,5 +269,3 @@ class TestReasoningEffortPassthrough:
             "LANGCHAIN_REASONING_EFFORT": "HIGH",
         })
         assert captured["extra_body"]["reasoning"]["effort"] == "high"
-
-

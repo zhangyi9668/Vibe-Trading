@@ -10,6 +10,8 @@ import {
 import { ProbabilityTrend } from "@/components/charts/ProbabilityTrend";
 import {
   api,
+  type EventProbabilityResult,
+  type ProbabilityHistorySeriesRequest,
   type ProbabilityOverview,
   type ProbabilityRefreshState,
   type ProbabilitySource,
@@ -61,6 +63,8 @@ const EMPTY_OVERVIEW: ProbabilityOverview = {
   },
 };
 
+const MAX_GROUPED_RESULTS = 5;
+
 function formatPercent(value: number | null): string {
   if (value === null) {
     return "—";
@@ -82,6 +86,25 @@ function formatCompactNumber(value: number): string {
     notation: "compact",
     maximumFractionDigits: 1,
   }).format(value);
+}
+
+function sortResultsByVolume(results: EventProbabilityResult[]): EventProbabilityResult[] {
+  return [...results].sort((left, right) => right.volume_24h - left.volume_24h);
+}
+
+function resultLabel(result: EventProbabilityResult): string {
+  return result.label_zh || result.label;
+}
+
+function resultSeries(results: EventProbabilityResult[]): ProbabilityHistorySeriesRequest[] {
+  return results
+    .filter((result): result is EventProbabilityResult & { token_id: string } =>
+      Boolean(result.token_id),
+    )
+    .map((result) => ({
+      label: resultLabel(result),
+      token_id: result.token_id,
+    }));
 }
 
 function statusLabel(state: ProbabilityRefreshState): string {
@@ -375,7 +398,23 @@ export function EventProbability() {
             </div>
 
             <div className="divide-y divide-border/60">
-              {filteredEvents.map((row, index) => (
+              {filteredEvents.map((row, index) => {
+                const isGroupedPolymarket =
+                  row.source === "polymarket" && row.results.length > 0;
+                const groupedResults = isGroupedPolymarket
+                  ? sortResultsByVolume(row.results).slice(0, MAX_GROUPED_RESULTS)
+                  : [];
+                const groupedSeries = resultSeries(groupedResults);
+                const singleSeries: ProbabilityHistorySeriesRequest[] =
+                  row.token_id_yes
+                    ? [
+                        {
+                          label: row.pick_label || row.outcomes[0] || "Yes",
+                          token_id: row.token_id_yes,
+                        },
+                      ]
+                    : [];
+                return (
                   <article key={`${row.source}-${row.slug}`} className="px-5 py-4">
                     <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                       <div className="min-w-0 flex-1 space-y-2">
@@ -423,57 +462,116 @@ export function EventProbability() {
                         </div>
                       </div>
 
-                      <div className="grid min-w-[240px] grid-cols-2 gap-3 rounded-2xl border border-border/70 bg-background/70 p-4 text-sm">
-                        <div>
-                          <div className="text-xs uppercase tracking-wide text-muted-foreground">
-                            概率
+                      {!isGroupedPolymarket ? (
+                        <div className="grid min-w-[240px] grid-cols-2 gap-3 rounded-2xl border border-border/70 bg-background/70 p-4 text-sm">
+                          <div>
+                            <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                              概率
+                            </div>
+                            <div className="mt-1 text-lg font-semibold">
+                              {formatPercent(row.prob_yes)}
+                            </div>
                           </div>
-                          <div className="mt-1 text-lg font-semibold">
-                            {formatPercent(row.prob_yes)}
+                          <div>
+                            <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                              24h
+                            </div>
+                            <div
+                              className={cn(
+                                "mt-1 text-lg font-semibold",
+                                (row.change_24h ?? 0) > 0 && "text-success",
+                                (row.change_24h ?? 0) < 0 && "text-danger",
+                              )}
+                            >
+                              {formatSignedPercent(row.change_24h)}
+                            </div>
+                          </div>
+                          <div>
+                            <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                              成交额
+                            </div>
+                            <div className="mt-1 font-medium">
+                              {formatCompactNumber(row.volume_24h)}
+                            </div>
+                          </div>
+                          <div>
+                            <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                              到期
+                            </div>
+                            <div className="mt-1 font-medium">
+                              {row.end_date
+                                ? new Date(row.end_date).toLocaleDateString("zh-CN")
+                                : "—"}
+                            </div>
                           </div>
                         </div>
-                        <div>
-                          <div className="text-xs uppercase tracking-wide text-muted-foreground">
-                            24h
-                          </div>
-                          <div
-                            className={cn(
-                              "mt-1 text-lg font-semibold",
-                              (row.change_24h ?? 0) > 0 && "text-success",
-                              (row.change_24h ?? 0) < 0 && "text-danger",
-                            )}
-                          >
-                            {formatSignedPercent(row.change_24h)}
-                          </div>
-                        </div>
-                        <div>
-                          <div className="text-xs uppercase tracking-wide text-muted-foreground">
-                            成交额
-                          </div>
-                          <div className="mt-1 font-medium">
-                            {formatCompactNumber(row.volume_24h)}
-                          </div>
-                        </div>
-                        <div>
-                          <div className="text-xs uppercase tracking-wide text-muted-foreground">
-                            到期
-                          </div>
-                          <div className="mt-1 font-medium">
-                            {row.end_date
-                              ? new Date(row.end_date).toLocaleDateString("zh-CN")
-                              : "—"}
-                          </div>
-                        </div>
-                      </div>
+                      ) : null}
                     </div>
 
-                    {row.source === "polymarket" && row.token_id_yes ? (
+                    {isGroupedPolymarket ? (
+                      <div className="mt-4 grid gap-2">
+                        {groupedResults.map((result) => (
+                          <div
+                            key={result.token_id || result.label}
+                            className="grid gap-3 rounded-2xl border border-border/70 bg-background/70 p-4 text-sm md:grid-cols-[minmax(0,1fr)_repeat(3,96px)] md:items-center"
+                          >
+                            <div className="min-w-0">
+                              <div className="font-medium text-foreground">
+                                {resultLabel(result)}
+                              </div>
+                              {result.label_zh ? (
+                                <div className="mt-1 text-xs text-muted-foreground">
+                                  {result.label}
+                                </div>
+                              ) : null}
+                            </div>
+                            <div>
+                              <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                                概率
+                              </div>
+                              <div className="mt-1 font-semibold">
+                                {formatPercent(result.probability)}
+                              </div>
+                            </div>
+                            <div>
+                              <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                                24h
+                              </div>
+                              <div
+                                className={cn(
+                                  "mt-1 font-semibold",
+                                  (result.change_24h ?? 0) > 0 && "text-success",
+                                  (result.change_24h ?? 0) < 0 && "text-danger",
+                                )}
+                              >
+                                {formatSignedPercent(result.change_24h)}
+                              </div>
+                            </div>
+                            <div>
+                              <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                                成交额
+                              </div>
+                              <div className="mt-1 font-medium">
+                                {formatCompactNumber(result.volume_24h)}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+
+                    {isGroupedPolymarket && groupedSeries.length > 0 ? (
                       <div className="mt-4 rounded-2xl border border-border/70 bg-background/70 p-4">
-                        <ProbabilityTrend tokenId={row.token_id_yes} />
+                        <ProbabilityTrend series={groupedSeries} />
+                      </div>
+                    ) : row.source === "polymarket" && singleSeries.length > 0 ? (
+                      <div className="mt-4 rounded-2xl border border-border/70 bg-background/70 p-4">
+                        <ProbabilityTrend series={singleSeries} />
                       </div>
                     ) : null}
                   </article>
-              ))}
+                );
+              })}
             </div>
           </section>
       )}
