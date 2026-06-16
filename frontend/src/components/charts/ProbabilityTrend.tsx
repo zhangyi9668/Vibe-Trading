@@ -104,9 +104,6 @@ export function ProbabilityTrend({ series }: ProbabilityTrendProps) {
       return;
     }
 
-    const timestamps = Array.from(
-      new Set(successfulHistories.flatMap((history) => history.points.map((point) => point.t))),
-    ).sort((left, right) => left - right);
     const theme = getChartTheme();
     const chart = echarts.init(containerRef.current);
     chart.setOption({
@@ -127,16 +124,15 @@ export function ProbabilityTrend({ series }: ProbabilityTrendProps) {
           value === null ? "暂无数据" : `${value.toFixed(1)}%`,
       },
       xAxis: {
-        type: "category",
-        data: timestamps.map((timestamp) =>
-          new Date(timestamp * 1000).toLocaleDateString("zh-CN", {
-            month: "numeric",
-            day: "numeric",
-          }),
-        ),
+        type: "time",
         axisLabel: {
           color: theme.textColor,
           fontSize: 11,
+          formatter: (value: number) =>
+            new Date(value).toLocaleDateString("zh-CN", {
+              month: "numeric",
+              day: "numeric",
+            }),
         },
         axisLine: {
           lineStyle: { color: theme.axisColor },
@@ -157,20 +153,20 @@ export function ProbabilityTrend({ series }: ProbabilityTrendProps) {
         },
       },
       series: successfulHistories.map((history, index) => {
-        const pointsByTimestamp = new Map(
-          history.points.map((point) => [point.t, formatPointValue(point.p)]),
-        );
         return {
           name: `${history.label} ${(latestProbability(history.points) * 100).toFixed(1)}%`,
           type: "line",
           smooth: true,
           showSymbol: false,
-          connectNulls: false,
+          connectNulls: true,
           lineStyle: {
             width: 2,
             color: LINE_COLORS[index],
           },
-          data: timestamps.map((timestamp) => pointsByTimestamp.get(timestamp) ?? null),
+          data: history.points.map((point) => [
+            point.t * 1000,
+            formatPointValue(point.p),
+          ]),
         };
       }),
     });

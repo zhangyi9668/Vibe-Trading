@@ -165,7 +165,7 @@ describe("ProbabilityTrend", () => {
     expect(apiMock.getEventProbabilityHistory).not.toHaveBeenCalled();
   });
 
-  it("renders five stable-color lines on a union timestamp axis without connecting null gaps", async () => {
+  it("renders five stable-color lines on a time axis without inserting null gaps", async () => {
     render(<ProbabilityTrend series={requests} />);
 
     triggerIntersecting();
@@ -177,6 +177,7 @@ describe("ProbabilityTrend", () => {
 
     expect(option.yAxis.min).toBe(0);
     expect(option.yAxis.max).toBe(100);
+    expect(option.xAxis.type).toBe("time");
     expect(option.legend.type).toBe("scroll");
     expect(option.legend.top).toBe(0);
     expect(option.series).toHaveLength(5);
@@ -190,13 +191,22 @@ describe("ProbabilityTrend", () => {
     expect(option.series.map((item: { lineStyle: { color: string } }) => item.lineStyle.color)).toEqual(
       COLORS,
     );
-    expect(option.series.every((item: { connectNulls: boolean }) => item.connectNulls === false)).toBe(true);
-    expect(option.series.map((item: { data: Array<number | null> }) => item.data)).toEqual([
-      [70, null, 71],
-      [null, 20, 25],
-      [40, 35, null],
-      [null, null, 82],
-      [null, 11, null],
+    expect(option.series.every((item: { connectNulls: boolean }) => item.connectNulls === true)).toBe(true);
+    expect(option.series.map((item: { data: Array<[number, number]> }) => item.data)).toEqual([
+      [
+        [100000, 70],
+        [300000, 71],
+      ],
+      [
+        [200000, 20],
+        [300000, 25],
+      ],
+      [
+        [100000, 40],
+        [200000, 35],
+      ],
+      [[300000, 82]],
+      [[200000, 11]],
     ]);
     expect(document.querySelector(".h-72")).toBeTruthy();
   });
