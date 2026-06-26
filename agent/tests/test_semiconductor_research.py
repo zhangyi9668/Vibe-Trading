@@ -1,6 +1,14 @@
 from __future__ import annotations
 
-from src.semiconductor_research.service import SemiconductorQuoteService
+from src.semiconductor_research.service import INDUSTRIES, INDUSTRY_COMPANIES, SemiconductorQuoteService
+
+
+def test_every_industry_has_a_refreshable_company_pool() -> None:
+    slugs = {str(industry["slug"]) for industry in INDUSTRIES}
+
+    assert slugs == set(INDUSTRY_COMPANIES)
+    assert all(industry["refreshable"] is True for industry in INDUSTRIES)
+    assert all(INDUSTRY_COMPANIES[slug] for slug in slugs)
 
 
 def test_fetch_company_uses_ifind_first_when_configured(monkeypatch) -> None:
@@ -38,6 +46,8 @@ def test_fetch_company_uses_ifind_first_when_configured(monkeypatch) -> None:
 
 
 def test_fetch_all_counts_successes_and_errors(monkeypatch) -> None:
+    monkeypatch.delenv("IFIND_ACCESS_TOKEN", raising=False)
+    monkeypatch.delenv("IFIND_REFRESH_TOKEN", raising=False)
     service = SemiconductorQuoteService(companies=[
         {"code": "000001.SZ", "ifind": "000001.SZ", "name": "成功公司", "segment": "设计/IP/AI"},
         {"code": "000002.SZ", "ifind": "000002.SZ", "name": "失败公司", "segment": "半导体设备"},

@@ -55,19 +55,19 @@ INDUSTRIES: list[dict[str, str | bool]] = [
     {"slug": "semiconductor", "name": "半导体国产替代", "summary": "制造、设备、材料、设计、封测和 EDA。", "refreshable": True},
     {"slug": "ai-data-center", "name": "AI 算力与数据中心", "summary": "光模块、交换机、液冷、服务器与 IDC。", "refreshable": True},
     {"slug": "innovative-drugs", "name": "创新药出海", "summary": "研发管线、BD 授权、临床读出与商业化。", "refreshable": True},
-    {"slug": "embodied-ai", "name": "人形机器人与具身智能", "summary": "核心零部件、整机与场景落地。", "refreshable": False},
-    {"slug": "low-altitude", "name": "低空经济", "summary": "飞行器、空域和基础设施。", "refreshable": False},
-    {"slug": "commercial-space", "name": "商业航天与卫星互联网", "summary": "火箭、卫星与地面站。", "refreshable": False},
-    {"slug": "defense", "name": "国防军工与无人化装备", "summary": "装备升级与无人系统。", "refreshable": False},
-    {"slug": "power-storage", "name": "新能源发电电网储能", "summary": "电力系统与新型储能。", "refreshable": False},
-    {"slug": "smart-auto", "name": "新能源车与智能汽车", "summary": "三电、智能化与零部件。", "refreshable": False},
-    {"slug": "synthetic-bio", "name": "生物制造与合成生物", "summary": "平台能力与规模化成本。", "refreshable": False},
-    {"slug": "metals", "name": "资源与电力金属", "summary": "供需平衡、成本曲线与价格弹性。", "refreshable": False},
-    {"slug": "silver-economy", "name": "银发经济与医疗器械服务", "summary": "医疗服务、器械渗透与人口结构。", "refreshable": False},
-    {"slug": "machine-tools", "name": "高端制造母机", "summary": "工业母机与核心零部件。", "refreshable": False},
+    {"slug": "embodied-ai", "name": "人形机器人与具身智能", "summary": "核心零部件、整机与场景落地。", "refreshable": True},
+    {"slug": "low-altitude", "name": "低空经济", "summary": "飞行器、空域和基础设施。", "refreshable": True},
+    {"slug": "commercial-space", "name": "商业航天与卫星互联网", "summary": "火箭、卫星与地面站。", "refreshable": True},
+    {"slug": "defense", "name": "国防军工与无人化装备", "summary": "装备升级与无人系统。", "refreshable": True},
+    {"slug": "power-storage", "name": "新能源发电电网储能", "summary": "电力系统与新型储能。", "refreshable": True},
+    {"slug": "smart-auto", "name": "新能源车与智能汽车", "summary": "三电、智能化与零部件。", "refreshable": True},
+    {"slug": "synthetic-bio", "name": "生物制造与合成生物", "summary": "平台能力与规模化成本。", "refreshable": True},
+    {"slug": "metals", "name": "资源与电力金属", "summary": "供需平衡、成本曲线与价格弹性。", "refreshable": True},
+    {"slug": "silver-economy", "name": "银发经济与医疗器械服务", "summary": "医疗服务、器械渗透与人口结构。", "refreshable": True},
+    {"slug": "machine-tools", "name": "高端制造母机", "summary": "工业母机与核心零部件。", "refreshable": True},
 ]
 
-TRIAL_COMPANIES: dict[str, list[dict[str, str]]] = {
+INDUSTRY_COMPANIES: dict[str, list[dict[str, str]]] = {
     "semiconductor": COMPANIES,
     "ai-data-center": [
         {"code": "300308.SZ", "ifind": "300308.SZ", "name": "中际旭创", "segment": "光模块"},
@@ -78,6 +78,76 @@ TRIAL_COMPANIES: dict[str, list[dict[str, str]]] = {
         {"code": "600276.SH", "ifind": "600276.SH", "name": "恒瑞医药", "segment": "创新药"},
         {"code": "300760.SZ", "ifind": "300760.SZ", "name": "迈瑞医疗", "segment": "医疗器械"},
         {"code": "688180.SH", "ifind": "688180.SH", "name": "君实生物", "segment": "创新药"},
+    ],
+    "embodied-ai": [
+        {"code": "688017.SH", "ifind": "688017.SH", "name": "绿的谐波", "segment": "精密传动"},
+        {"code": "003021.SZ", "ifind": "003021.SZ", "name": "兆威机电", "segment": "执行器"},
+        {"code": "603728.SH", "ifind": "603728.SH", "name": "鸣志电器", "segment": "电机"},
+        {"code": "300124.SZ", "ifind": "300124.SZ", "name": "汇川技术", "segment": "控制器/伺服"},
+        {"code": "601689.SH", "ifind": "601689.SH", "name": "拓普集团", "segment": "结构件"},
+    ],
+    "low-altitude": [
+        {"code": "300012.SZ", "ifind": "300012.SZ", "name": "华测检测", "segment": "检测认证"},
+        {"code": "002967.SZ", "ifind": "002967.SZ", "name": "广电计量", "segment": "检测认证"},
+        {"code": "002179.SZ", "ifind": "002179.SZ", "name": "中航光电", "segment": "机载配套"},
+        {"code": "688522.SH", "ifind": "688522.SH", "name": "纳睿雷达", "segment": "低空感知"},
+        {"code": "000099.SZ", "ifind": "000099.SZ", "name": "中信海直", "segment": "通航运营"},
+    ],
+    "commercial-space": [
+        {"code": "300627.SZ", "ifind": "300627.SZ", "name": "华测导航", "segment": "北斗应用"},
+        {"code": "688375.SH", "ifind": "688375.SH", "name": "国博电子", "segment": "星载射频"},
+        {"code": "688333.SH", "ifind": "688333.SH", "name": "铂力特", "segment": "航天制造"},
+        {"code": "001270.SZ", "ifind": "001270.SZ", "name": "铖昌科技", "segment": "星载芯片"},
+        {"code": "600118.SH", "ifind": "600118.SH", "name": "中国卫星", "segment": "卫星制造"},
+    ],
+    "defense": [
+        {"code": "600760.SH", "ifind": "600760.SH", "name": "中航沈飞", "segment": "航空整机"},
+        {"code": "600893.SH", "ifind": "600893.SH", "name": "航发动力", "segment": "航空发动机"},
+        {"code": "000768.SZ", "ifind": "000768.SZ", "name": "中航西飞", "segment": "航空整机"},
+        {"code": "688297.SH", "ifind": "688297.SH", "name": "中无人机", "segment": "无人机"},
+        {"code": "002025.SZ", "ifind": "002025.SZ", "name": "航天电器", "segment": "军工电子"},
+    ],
+    "power-storage": [
+        {"code": "300274.SZ", "ifind": "300274.SZ", "name": "阳光电源", "segment": "光伏逆变器"},
+        {"code": "300750.SZ", "ifind": "300750.SZ", "name": "宁德时代", "segment": "储能电池"},
+        {"code": "600406.SH", "ifind": "600406.SH", "name": "国电南瑞", "segment": "电网自动化"},
+        {"code": "605117.SH", "ifind": "605117.SH", "name": "德业股份", "segment": "储能逆变器"},
+        {"code": "300827.SZ", "ifind": "300827.SZ", "name": "上能电气", "segment": "储能变流器"},
+    ],
+    "smart-auto": [
+        {"code": "002594.SZ", "ifind": "002594.SZ", "name": "比亚迪", "segment": "整车/三电"},
+        {"code": "300750.SZ", "ifind": "300750.SZ", "name": "宁德时代", "segment": "动力电池"},
+        {"code": "601127.SH", "ifind": "601127.SH", "name": "赛力斯", "segment": "智能汽车"},
+        {"code": "002920.SZ", "ifind": "002920.SZ", "name": "德赛西威", "segment": "智能座舱"},
+        {"code": "601689.SH", "ifind": "601689.SH", "name": "拓普集团", "segment": "智能汽车零部件"},
+    ],
+    "synthetic-bio": [
+        {"code": "688065.SH", "ifind": "688065.SH", "name": "凯赛生物", "segment": "生物基材料"},
+        {"code": "688639.SH", "ifind": "688639.SH", "name": "华恒生物", "segment": "生物发酵"},
+        {"code": "600873.SH", "ifind": "600873.SH", "name": "梅花生物", "segment": "氨基酸"},
+        {"code": "301301.SZ", "ifind": "301301.SZ", "name": "川宁生物", "segment": "合成生物"},
+        {"code": "600789.SH", "ifind": "600789.SH", "name": "鲁抗医药", "segment": "生物制造"},
+    ],
+    "metals": [
+        {"code": "601899.SH", "ifind": "601899.SH", "name": "紫金矿业", "segment": "铜金资源"},
+        {"code": "603993.SH", "ifind": "603993.SH", "name": "洛阳钼业", "segment": "铜钴资源"},
+        {"code": "601600.SH", "ifind": "601600.SH", "name": "中国铝业", "segment": "铝"},
+        {"code": "000792.SZ", "ifind": "000792.SZ", "name": "盐湖股份", "segment": "锂钾"},
+        {"code": "600111.SH", "ifind": "600111.SH", "name": "北方稀土", "segment": "稀土"},
+    ],
+    "silver-economy": [
+        {"code": "300760.SZ", "ifind": "300760.SZ", "name": "迈瑞医疗", "segment": "医疗器械"},
+        {"code": "002223.SZ", "ifind": "002223.SZ", "name": "鱼跃医疗", "segment": "家用器械"},
+        {"code": "300015.SZ", "ifind": "300015.SZ", "name": "爱尔眼科", "segment": "医疗服务"},
+        {"code": "600763.SH", "ifind": "600763.SH", "name": "通策医疗", "segment": "医疗服务"},
+        {"code": "301087.SZ", "ifind": "301087.SZ", "name": "可孚医疗", "segment": "家用器械"},
+    ],
+    "machine-tools": [
+        {"code": "601882.SH", "ifind": "601882.SH", "name": "海天精工", "segment": "高端整机"},
+        {"code": "688305.SH", "ifind": "688305.SH", "name": "科德数控", "segment": "五轴机床"},
+        {"code": "688059.SH", "ifind": "688059.SH", "name": "华锐精密", "segment": "刀具耗材"},
+        {"code": "300124.SZ", "ifind": "300124.SZ", "name": "汇川技术", "segment": "工控伺服"},
+        {"code": "300161.SZ", "ifind": "300161.SZ", "name": "华中数控", "segment": "数控系统"},
     ],
 }
 
@@ -147,9 +217,9 @@ class SemiconductorQuoteService:
         return INDUSTRIES
 
     def fetch_industry(self, slug: str) -> dict[str, Any]:
-        if slug not in TRIAL_COMPANIES:
+        if slug not in INDUSTRY_COMPANIES:
             raise ValueError("该行业暂未接入可刷新数据")
-        payload = SemiconductorQuoteService(companies=TRIAL_COMPANIES[slug]).fetch_all()
+        payload = SemiconductorQuoteService(companies=INDUSTRY_COMPANIES[slug]).fetch_all()
         return {"industry": slug, **payload}
 
     def report(self, slug: str) -> dict[str, str]:
