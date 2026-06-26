@@ -5,6 +5,12 @@ from src.api import semiconductor_routes
 
 
 class FakeService:
+    def industries(self):
+        return [
+            {"slug": "semiconductor", "name": "半导体国产替代"}
+            for _ in range(13)
+        ]
+
     def fetch_all(self):
         return {
             "updated_at": "2026-06-19T20:00:00+08:00",
@@ -26,6 +32,9 @@ class FakeService:
                 }
             ],
         }
+
+    def fetch_industry(self, slug):
+        return {"industry": slug, "updated_at": "2026-06-26T10:00:00+08:00", "success_count": 1, "error_count": 0, "rows": []}
 
     def health(self):
         return {"status": "ok", "wind_cli": True, "ifind_configured": True}
@@ -54,3 +63,18 @@ def test_health_route_reports_ifind_configuration(monkeypatch) -> None:
 
     assert response.status_code == 200
     assert response.json()["ifind_configured"] is True
+
+
+def test_industries_route_lists_all_frameworks(monkeypatch) -> None:
+    response = client(monkeypatch).get("/industries")
+
+    assert response.status_code == 200
+    assert len(response.json()["industries"]) == 13
+    assert response.json()["industries"][0]["slug"] == "semiconductor"
+
+
+def test_trial_industry_quotes_are_refreshable(monkeypatch) -> None:
+    response = client(monkeypatch).get("/industries/ai-data-center/quotes")
+
+    assert response.status_code == 200
+    assert response.json()["industry"] == "ai-data-center"

@@ -21,7 +21,7 @@ export function Layout() {
     { to: "/reports", icon: FileText, label: t('layout.reports') },
     { to: "/alpha-zoo", icon: Layers, label: t('layout.alphaZoo') },
     { to: "/event-probability", icon: Gauge, label: "事件概率" },
-    { to: "/semiconductor-research", icon: Cpu, label: "半导体行业研究" },
+    { to: "/industry-research", icon: Cpu, label: "行业研究" },
     { to: "/settings", icon: Settings, label: t('layout.settings') },
     { to: "/correlation", icon: BarChart3, label: t('layout.correlation') },
   ];

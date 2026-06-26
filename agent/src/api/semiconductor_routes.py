@@ -28,6 +28,17 @@ def _internal_error(operation: str, exc: Exception) -> HTTPException:
 
 
 def register_semiconductor_routes(app: FastAPI, require_auth: AuthDep) -> None:
+    @app.get("/industries", dependencies=[Depends(require_auth)])
+    async def get_industries():
+        return {"industries": _get_service().industries()}
+
+    @app.get("/industries/{slug}/quotes", dependencies=[Depends(require_auth)])
+    async def get_industry_quotes(slug: str):
+        try:
+            return await asyncio.to_thread(_get_service().fetch_industry, slug)
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+
     @app.get("/semiconductor/health", dependencies=[Depends(require_auth)])
     async def get_semiconductor_health():
         try:

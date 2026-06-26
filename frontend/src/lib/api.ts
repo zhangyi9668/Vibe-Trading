@@ -174,6 +174,13 @@ export interface SemiconductorHealth {
   ifind_configured: boolean;
 }
 
+export interface IndustrySummary {
+  slug: string;
+  name: string;
+  summary: string;
+  refreshable: boolean;
+}
+
 async function uploadFile(file: File): Promise<UploadResult> {
   const form = new FormData();
   form.append("file", file);
@@ -282,6 +289,8 @@ export const api = {
     request<SemiconductorHealth>("/semiconductor/health"),
   getSemiconductorQuotes: () =>
     request<SemiconductorQuotesPayload>("/semiconductor/quotes"),
+  getIndustries: () => request<{ industries: IndustrySummary[] }>("/industries"),
+  getIndustryQuotes: (slug: string) => request<SemiconductorQuotesPayload & { industry: string }>(`/industries/${slug}/quotes`),
 
   // Alpha Zoo API
   listAlphas: (params: AlphaListParams = {}) => {

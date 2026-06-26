@@ -51,6 +51,36 @@ COMPANIES: list[dict[str, str]] = [
     {"code": "688107.SH", "ifind": "688107.SH", "name": "安路科技", "segment": "EDA/FPGA"},
 ]
 
+INDUSTRIES: list[dict[str, str | bool]] = [
+    {"slug": "semiconductor", "name": "半导体国产替代", "summary": "制造、设备、材料、设计、封测和 EDA。", "refreshable": True},
+    {"slug": "ai-data-center", "name": "AI 算力与数据中心", "summary": "光模块、交换机、液冷、服务器与 IDC。", "refreshable": True},
+    {"slug": "innovative-drugs", "name": "创新药出海", "summary": "研发管线、BD 授权、临床读出与商业化。", "refreshable": True},
+    {"slug": "embodied-ai", "name": "人形机器人与具身智能", "summary": "核心零部件、整机与场景落地。", "refreshable": False},
+    {"slug": "low-altitude", "name": "低空经济", "summary": "飞行器、空域和基础设施。", "refreshable": False},
+    {"slug": "commercial-space", "name": "商业航天与卫星互联网", "summary": "火箭、卫星与地面站。", "refreshable": False},
+    {"slug": "defense", "name": "国防军工与无人化装备", "summary": "装备升级与无人系统。", "refreshable": False},
+    {"slug": "power-storage", "name": "新能源发电电网储能", "summary": "电力系统与新型储能。", "refreshable": False},
+    {"slug": "smart-auto", "name": "新能源车与智能汽车", "summary": "三电、智能化与零部件。", "refreshable": False},
+    {"slug": "synthetic-bio", "name": "生物制造与合成生物", "summary": "平台能力与规模化成本。", "refreshable": False},
+    {"slug": "metals", "name": "资源与电力金属", "summary": "供需平衡、成本曲线与价格弹性。", "refreshable": False},
+    {"slug": "silver-economy", "name": "银发经济与医疗器械服务", "summary": "医疗服务、器械渗透与人口结构。", "refreshable": False},
+    {"slug": "machine-tools", "name": "高端制造母机", "summary": "工业母机与核心零部件。", "refreshable": False},
+]
+
+TRIAL_COMPANIES: dict[str, list[dict[str, str]]] = {
+    "semiconductor": COMPANIES,
+    "ai-data-center": [
+        {"code": "300308.SZ", "ifind": "300308.SZ", "name": "中际旭创", "segment": "光模块"},
+        {"code": "000977.SZ", "ifind": "000977.SZ", "name": "浪潮信息", "segment": "服务器"},
+        {"code": "000938.SZ", "ifind": "000938.SZ", "name": "紫光股份", "segment": "交换机"},
+    ],
+    "innovative-drugs": [
+        {"code": "600276.SH", "ifind": "600276.SH", "name": "恒瑞医药", "segment": "创新药"},
+        {"code": "300760.SZ", "ifind": "300760.SZ", "name": "迈瑞医疗", "segment": "医疗器械"},
+        {"code": "688180.SH", "ifind": "688180.SH", "name": "君实生物", "segment": "创新药"},
+    ],
+}
+
 _DOTENV_LOADED = False
 _AGENT_DIR = Path(__file__).resolve().parents[2]
 _SOURCE_DIR = _AGENT_DIR.parent
@@ -108,6 +138,15 @@ class SemiconductorQuoteService:
             "wind_cli": WIND_CLI.exists(),
             "ifind_configured": self.ifind_configured(),
         }
+
+    def industries(self) -> list[dict[str, str | bool]]:
+        return INDUSTRIES
+
+    def fetch_industry(self, slug: str) -> dict[str, Any]:
+        if slug not in TRIAL_COMPANIES:
+            raise ValueError("该行业暂未接入可刷新数据")
+        payload = SemiconductorQuoteService(companies=TRIAL_COMPANIES[slug]).fetch_all()
+        return {"industry": slug, **payload}
 
     def ifind_configured(self) -> bool:
         return bool(os.getenv("IFIND_ACCESS_TOKEN") or os.getenv("IFIND_REFRESH_TOKEN"))
