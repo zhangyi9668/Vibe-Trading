@@ -632,7 +632,7 @@ async def _run_startup_preflight() -> None:
     """Run preflight checks on server startup."""
     from src.preflight import run_preflight
 
-    run_preflight(console)
+    asyncio.create_task(asyncio.to_thread(run_preflight, console))
     _start_scheduled_research_executor()
 
 
