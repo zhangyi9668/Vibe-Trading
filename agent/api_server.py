@@ -535,7 +535,7 @@ app.add_middleware(
 
 _FRONTEND_DIST = Path(__file__).resolve().parent.parent / "frontend" / "dist"
 _SPA_HTML_EXACT_PATHS: frozenset[str] = frozenset(
-    {"/correlation", "/event-probability"}
+    {"/correlation", "/event-probability", "/semiconductor-research"}
 )
 # Each regex matches a complete request path. Trailing slash optional.
 _SPA_HTML_PATH_REGEX: tuple[re.Pattern[str], ...] = (
@@ -3067,6 +3067,9 @@ from src.api.event_probability_routes import (  # noqa: E402
     register_event_probability_routes,
 )
 register_event_probability_routes(app, require_auth=require_auth)
+
+from src.api.semiconductor_routes import register_semiconductor_routes  # noqa: E402
+register_semiconductor_routes(app, require_auth=require_auth)
 
 
 # ============================================================================

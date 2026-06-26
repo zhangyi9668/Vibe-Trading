@@ -24,6 +24,11 @@ const EventProbability = lazy(() =>
     default: m.EventProbability,
   })),
 );
+const SemiconductorResearch = lazy(() =>
+  import("@/pages/SemiconductorResearch").then((m) => ({
+    default: m.SemiconductorResearch,
+  })),
+);
 
 function PageLoader() {
   return (
@@ -55,6 +60,7 @@ export const router = createBrowserRouter([
       { path: "/alpha-zoo/bench", element: wrap(AlphaZoo) },
       { path: "/alpha-zoo/:alphaId", element: wrap(AlphaZoo) },
       { path: "/event-probability", element: wrap(EventProbability) },
+      { path: "/semiconductor-research", element: wrap(SemiconductorResearch) },
     ],
   },
 ]);

@@ -147,6 +147,33 @@ export interface ProbabilityHistorySeries {
   error: string | null;
 }
 
+export interface SemiconductorQuote {
+  code: string;
+  name: string;
+  segment: string;
+  price: number | null;
+  change_pct: number | null;
+  amount: number | null;
+  market_cap: number | null;
+  pe_ttm: number | null;
+  pb: number | null;
+  source: "Wind" | "iFinD" | "不可用" | string;
+  error: string | null;
+}
+
+export interface SemiconductorQuotesPayload {
+  updated_at: string;
+  success_count: number;
+  error_count: number;
+  rows: SemiconductorQuote[];
+}
+
+export interface SemiconductorHealth {
+  status: string;
+  wind_cli: boolean;
+  ifind_configured: boolean;
+}
+
 async function uploadFile(file: File): Promise<UploadResult> {
   const form = new FormData();
   form.append("file", file);
@@ -245,6 +272,10 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ series }),
     }),
+  getSemiconductorHealth: () =>
+    request<SemiconductorHealth>("/semiconductor/health"),
+  getSemiconductorQuotes: () =>
+    request<SemiconductorQuotesPayload>("/semiconductor/quotes"),
 
   // Alpha Zoo API
   listAlphas: (params: AlphaListParams = {}) => {
