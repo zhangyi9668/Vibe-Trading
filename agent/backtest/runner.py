@@ -14,7 +14,7 @@ import json
 import logging
 import sys
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 import pandas as pd
 from pydantic import BaseModel, ConfigDict, model_validator, field_validator
@@ -28,10 +28,11 @@ except ImportError:
 from backtest.loaders.registry import (
     FALLBACK_CHAINS,
     LOADER_REGISTRY,
+    VALID_SOURCES,
     get_loader_cls_with_fallback,
     resolve_loader,
 )
-from backtest.loaders.base import NoAvailableSourceError
+from backtest.loaders.base import NoAvailableSourceError, validate_ohlc
 # Symbol classification lives in ``_market_hooks`` so runner.py and
 # composite.py share a single source of truth (audit-2026-05-18 B1+C1+C2).
 # ``_detect_market`` is also re-exported here for back-compat with
@@ -47,7 +48,6 @@ logger = logging.getLogger(__name__)
 
 _VALID_INTERVALS = {"1m", "5m", "15m", "30m", "1H", "4H", "1D"}
 _VALID_ENGINES = {"daily", "options"}
-_VALID_SOURCES = {"tushare", "okx", "yfinance", "akshare", "ccxt", "auto"}
 
 
 class BacktestConfigSchema(BaseModel):
@@ -62,6 +62,7 @@ class BacktestConfigSchema(BaseModel):
     interval: str = "1D"
     engine: str = "daily"
     fundamental_fields: Optional[Dict[str, List[str]]] = None
+    event_feeds: Optional[List[Dict[str, Any]]] = None
 
     @field_validator("codes")
     @classmethod
@@ -98,8 +99,8 @@ class BacktestConfigSchema(BaseModel):
     @field_validator("source")
     @classmethod
     def valid_source(cls, v: str) -> str:
-        if v not in _VALID_SOURCES:
-            raise ValueError(f"unsupported source {v!r}, must be one of {_VALID_SOURCES}")
+        if v not in VALID_SOURCES:
+            raise ValueError(f"unsupported source {v!r}, must be one of {VALID_SOURCES}")
         return v
 
     @field_validator("fundamental_fields")
@@ -115,6 +116,21 @@ class BacktestConfigSchema(BaseModel):
                 raise ValueError("fundamental_fields table names must be non-empty strings")
             if any(not field.strip() for field in fields):
                 raise ValueError("fundamental_fields field names must be non-empty strings")
+        return v
+
+    @field_validator("event_feeds")
+    @classmethod
+    def valid_event_feeds(cls, v: Optional[List[Dict[str, Any]]]) -> Optional[List[Dict[str, Any]]]:
+        if v is None:
+            return v
+        for entry in v:
+            if not isinstance(entry, dict):
+                raise ValueError(
+                    "each event_feeds entry must be an object with name/route_template/event_type"
+                )
+            for key in ("name", "route_template", "event_type"):
+                if not str(entry.get(key, "")).strip():
+                    raise ValueError(f"event_feeds entry missing required field: {key}")
         return v
 
     @model_validator(mode="after")
@@ -478,6 +494,10 @@ def main(run_dir: Path) -> None:
                     source = fb_name
                     loader = fb_loader
                     break
+
+    # Loader-boundary OHLC sanity for every source, centralized at the one
+    # point all fetch paths converge (auto / single / runtime fallback).
+    data_map = _sanitize_data_map(data_map)
     if not data_map:
         print(json.dumps({"error": "No data fetched"}))
         sys.exit(1)
@@ -637,6 +657,26 @@ def _fetch_auto(codes: List[str], config: dict, interval: str = "1D") -> dict:
         merged.update(result)
 
     return merged
+
+
+def _sanitize_data_map(data_map: dict) -> dict:
+    """Drop structurally-invalid OHLC bars from every fetched frame.
+
+    Each loader only drops NaN rows, so a bar that violates the OHLC
+    invariants (``high < low``, a non-positive price, or a high/low that fails
+    to bracket open/close) can still reach the backtest and surface as NaN/inf
+    metrics. Applying :func:`validate_ohlc` here — the single point every
+    fetched map converges through — guards every source uniformly (``auto``,
+    single-source, runtime fallback, and any future loader), so the per-loader
+    checks no longer have to be added one at a time.
+
+    Args:
+        data_map: ``code -> DataFrame`` map as returned by a loader fetch.
+
+    Returns:
+        The same mapping with each frame's invalid bars removed.
+    """
+    return {code: validate_ohlc(frame) for code, frame in data_map.items()}
 
 
 class _AutoLoader:
