@@ -78,3 +78,12 @@ def test_trial_industry_quotes_are_refreshable(monkeypatch) -> None:
 
     assert response.status_code == 200
     assert response.json()["industry"] == "ai-data-center"
+
+
+def test_industry_report_returns_markdown(monkeypatch) -> None:
+    monkeypatch.setattr(semiconductor_routes, "_get_service", lambda: type("Service", (), {"report": lambda _, slug: {"industry": slug, "content": "# 报告"}})())
+
+    response = client(monkeypatch).get("/industries/ai-data-center/report")
+
+    assert response.status_code == 200
+    assert response.json()["content"] == "# 报告"

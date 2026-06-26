@@ -291,6 +291,7 @@ export const api = {
     request<SemiconductorQuotesPayload>("/semiconductor/quotes"),
   getIndustries: () => request<{ industries: IndustrySummary[] }>("/industries"),
   getIndustryQuotes: (slug: string) => request<SemiconductorQuotesPayload & { industry: string }>(`/industries/${slug}/quotes`),
+  getIndustryReport: (slug: string) => request<{ industry: string; content: string }>(`/industries/${slug}/report`),
 
   // Alpha Zoo API
   listAlphas: (params: AlphaListParams = {}) => {

@@ -39,6 +39,13 @@ def register_semiconductor_routes(app: FastAPI, require_auth: AuthDep) -> None:
         except ValueError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
 
+    @app.get("/industries/{slug}/report", dependencies=[Depends(require_auth)])
+    async def get_industry_report(slug: str):
+        try:
+            return await asyncio.to_thread(_get_service().report, slug)
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+
     @app.get("/semiconductor/health", dependencies=[Depends(require_auth)])
     async def get_semiconductor_health():
         try:

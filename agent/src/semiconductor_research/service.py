@@ -81,6 +81,10 @@ TRIAL_COMPANIES: dict[str, list[dict[str, str]]] = {
     ],
 }
 
+REPORT_FOLDERS = {
+    "semiconductor": "半导体国产替代框架", "ai-data-center": "AI算力与数据中心框架", "innovative-drugs": "创新药出海框架", "embodied-ai": "人形机器人与具身智能框架", "low-altitude": "低空经济框架", "commercial-space": "商业航天与卫星互联网框架", "defense": "国防军工与无人化装备框架", "power-storage": "新能源发电电网储能框架", "smart-auto": "新能源车与智能汽车框架", "synthetic-bio": "生物制造与合成生物框架", "metals": "资源与电力金属框架", "silver-economy": "银发经济与医疗器械服务框架", "machine-tools": "高端制造母机框架",
+}
+
 _DOTENV_LOADED = False
 _AGENT_DIR = Path(__file__).resolve().parents[2]
 _SOURCE_DIR = _AGENT_DIR.parent
@@ -147,6 +151,16 @@ class SemiconductorQuoteService:
             raise ValueError("该行业暂未接入可刷新数据")
         payload = SemiconductorQuoteService(companies=TRIAL_COMPANIES[slug]).fetch_all()
         return {"industry": slug, **payload}
+
+    def report(self, slug: str) -> dict[str, str]:
+        folder = REPORT_FOLDERS.get(slug)
+        if not folder:
+            raise ValueError("未找到行业研究报告")
+        root = Path(__file__).resolve().parents[4] / "行业研究框架" / folder
+        reports = sorted(root.glob("*框架统一版.md"))
+        if not reports:
+            raise ValueError("行业研究报告文件不存在")
+        return {"industry": slug, "content": reports[0].read_text(encoding="utf-8")}
 
     def ifind_configured(self) -> bool:
         return bool(os.getenv("IFIND_ACCESS_TOKEN") or os.getenv("IFIND_REFRESH_TOKEN"))
