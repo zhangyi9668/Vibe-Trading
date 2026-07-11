@@ -1,6 +1,6 @@
 """OpenAI Codex OAuth provider.
 
-This provider follows nanobot's OpenAI Codex OAuth path: a ChatGPT account is
+This provider follows the reference OpenAI Codex OAuth path: a ChatGPT account is
 authenticated by oauth-cli-kit, then requests are sent to the ChatGPT Codex
 Responses endpoint. It is intentionally separate from the standard OpenAI API
 key path because ChatGPT OAuth tokens are not OpenAI API keys.
@@ -18,6 +18,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Iterable, Optional
 from urllib.parse import urlparse
+
+from src.config.accessor import get_env_config
 
 try:
     import httpx
@@ -322,6 +324,7 @@ def _map_finish_reason(status: str | None) -> str:
         "incomplete": "length",
         "failed": "error",
         "cancelled": "error",
+        "content_filter": "content_filter",
     }.get(status or "completed", "stop")
 
 
@@ -420,7 +423,7 @@ class OpenAICodexLLM:
         self.tools = tools or []
         self.reasoning_effort = reasoning_effort
         self.codex_url = validate_codex_base_url(
-            codex_url or os.getenv("OPENAI_CODEX_BASE_URL", DEFAULT_CODEX_URL)
+            codex_url or get_env_config().llm.openai_codex_base_url
         )
 
     def bind_tools(self, tools: list[dict[str, Any]]) -> "OpenAICodexLLM":
