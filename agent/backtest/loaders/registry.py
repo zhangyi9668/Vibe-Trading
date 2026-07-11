@@ -51,6 +51,7 @@ VALID_SOURCES: set[str] = {
     "qveris",  # QVERIS-INTEGRATION
     "india_broker",
     "local",
+    "wind_local",
     "auto",
 }
 
@@ -97,6 +98,7 @@ def _ensure_registered() -> None:
         "backtest.loaders.qveris_loader",  # QVERIS-INTEGRATION
         "backtest.loaders.india_broker_loader",
         "backtest.loaders.local_loader",
+        "backtest.loaders.wind_local_loader",
     ]
     import importlib
     for mod in _loader_modules:
@@ -113,7 +115,9 @@ def _ensure_registered() -> None:
 # unavailable ``local`` request can degrade into an unrelated network source.
 # An explicit ``local`` request that is unavailable is a config problem the user
 # must see, not something to paper over with a Yahoo/Tencent fetch.
-_NO_NETWORK_FALLBACK_SOURCES: frozenset[str] = frozenset({"local", "qveris"})  # QVERIS-INTEGRATION
+_NO_NETWORK_FALLBACK_SOURCES: frozenset[str] = frozenset(
+    {"local", "qveris", "wind_local"}
+)  # QVERIS-INTEGRATION
 
 
 # ---------------------------------------------------------------------------
