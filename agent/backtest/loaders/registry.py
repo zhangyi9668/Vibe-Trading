@@ -49,6 +49,7 @@ VALID_SOURCES: set[str] = {
     "tiingo",
     "fmp",
     "local",
+    "wind_local",
     "auto",
 }
 
@@ -93,6 +94,7 @@ def _ensure_registered() -> None:
         "backtest.loaders.tiingo_loader",
         "backtest.loaders.fmp_loader",
         "backtest.loaders.local_loader",
+        "backtest.loaders.wind_local_loader",
     ]
     import importlib
     for mod in _loader_modules:
@@ -109,7 +111,7 @@ def _ensure_registered() -> None:
 # unavailable ``local`` request can degrade into an unrelated network source.
 # An explicit ``local`` request that is unavailable is a config problem the user
 # must see, not something to paper over with a Yahoo/Tencent fetch.
-_NO_NETWORK_FALLBACK_SOURCES: frozenset[str] = frozenset({"local"})
+_NO_NETWORK_FALLBACK_SOURCES: frozenset[str] = frozenset({"local", "wind_local"})
 
 
 # ---------------------------------------------------------------------------
