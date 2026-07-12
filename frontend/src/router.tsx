@@ -25,6 +25,18 @@ const Correlation = lazy(() =>
 const AlphaZoo = lazy(() =>
   import("@/pages/AlphaZoo").then((m) => ({ default: m.AlphaZoo })),
 );
+const EventProbability = lazy(() =>
+  import("@/pages/EventProbability").then((m) => ({
+    default: m.EventProbability,
+  })),
+);
+const SemiconductorResearch = lazy(() =>
+  import("@/pages/SemiconductorResearch").then((m) => ({
+    default: m.SemiconductorResearch,
+  })),
+);
+const IndustryResearch = lazy(() => import("@/pages/IndustryResearch").then((m) => ({ default: m.IndustryResearch })));
+const IndustryDetail = lazy(() => import("@/pages/IndustryDetail").then((m) => ({ default: m.IndustryDetail })));
 
 function PageLoader() {
   return (
@@ -58,6 +70,10 @@ export const router = createBrowserRouter([
       { path: "/alpha-zoo/bench", element: wrap(AlphaZoo) },
       { path: "/alpha-zoo/compare", element: wrap(AlphaZoo) },
       { path: "/alpha-zoo/:alphaId", element: wrap(AlphaZoo) },
+      { path: "/event-probability", element: wrap(EventProbability) },
+      { path: "/industry-research", element: wrap(IndustryResearch) },
+      { path: "/industry-research/:slug", element: wrap(IndustryDetail) },
+      { path: "/semiconductor-research", element: wrap(SemiconductorResearch) },
     ],
   },
 ]);

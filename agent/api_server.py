@@ -8,6 +8,7 @@ infrastructure lives in ``src.api.{security,models,helpers,state}``.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 from pathlib import Path
@@ -152,7 +153,7 @@ async def _run_startup_preflight() -> None:
     """Run preflight checks on server startup."""
     from src.preflight import run_preflight
 
-    run_preflight(console)
+    asyncio.create_task(asyncio.to_thread(run_preflight, console))
     _start_scheduled_research_executor()
     from src.config.accessor import get_env_config
 
@@ -267,6 +268,14 @@ from src.api.live_routes import (  # noqa: F401, E402
 # --- Alpha Zoo ---
 from src.api.alpha_routes import register_alpha_routes  # noqa: E402
 register_alpha_routes(app)
+
+from src.api.event_probability_routes import (  # noqa: E402
+    register_event_probability_routes,
+)
+register_event_probability_routes(app, require_auth=require_auth)
+
+from src.api.semiconductor_routes import register_semiconductor_routes  # noqa: E402
+register_semiconductor_routes(app, require_auth=require_auth)
 
 
 # ============================================================================

@@ -195,6 +195,29 @@ class TestSyncProviderEnv:
         assert "minimax.io" in result["OPENAI_BASE_URL"]
 
 
+def test_build_llm_provider_override_uses_codex_without_mutating_global_provider(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import src.providers.llm as llm_mod
+    from src.providers.openai_codex import OpenAICodexLLM
+
+    llm_mod._dotenv_loaded = True
+    monkeypatch.setenv("LANGCHAIN_PROVIDER", "openrouter")
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-main-provider")
+    monkeypatch.setenv("OPENAI_BASE_URL", "https://api.main-provider.example/v1")
+    monkeypatch.setenv("OPENAI_API_BASE", "https://api.main-provider.example/v1-legacy")
+
+    adapter = build_llm(
+        model_name="openai-codex/gpt-5.2-codex",
+        provider="openai-codex",
+    )
+
+    assert isinstance(adapter, OpenAICodexLLM)
+    assert adapter.model == "openai-codex/gpt-5.2-codex"
+    assert os.environ["LANGCHAIN_PROVIDER"] == "openrouter"
+    assert os.environ["OPENAI_BASE_URL"] == "https://api.main-provider.example/v1"
+
+
 # ---------------------------------------------------------------------------
 # MiniMax temperature clamping
 # ---------------------------------------------------------------------------
@@ -299,8 +322,6 @@ class TestReasoningEffortPassthrough:
             "LANGCHAIN_REASONING_EFFORT": "HIGH",
         })
         assert captured["extra_body"]["reasoning"]["effort"] == "high"
-
-
 class TestKimiCodingProvider:
     """Kimi for Coding is a distinct provider with Moonshot-compatible behavior."""
 

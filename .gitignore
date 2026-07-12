@@ -1,5 +1,7 @@
 .venv/
 agent/.venv/
+.worktrees/
+.runtime/
 __pycache__/
 .pytest_cache/
 *.pyc

@@ -464,7 +464,7 @@ def _normalize_ollama_base_url(base_url: str) -> str:
     return f"{url}/v1"
 
 
-def _sync_provider_env() -> None:
+def _sync_provider_env(provider: str | None = None) -> None:
     """Map provider-specific env vars to OPENAI_* for ChatOpenAI.
 
     Each entry: provider_name -> (api_key_env, base_url_env).
@@ -473,17 +473,18 @@ def _sync_provider_env() -> None:
     """
     _ensure_dotenv()
     reset_env_config()
-    provider = get_env_config().llm.langchain_provider.lower()
+    llm_config = get_env_config().llm
+    provider_name = (provider or llm_config.langchain_provider).lower()
 
-    if provider in {"openai-codex", "openai_codex"}:
-        codex_url = get_env_config().llm.openai_codex_base_url
+    if provider_name in {"openai-codex", "openai_codex"}:
+        codex_url = llm_config.openai_codex_base_url
         # SDK-side env setup, not Vibe-Trading config reads
         os.environ["OPENAI_API_BASE"] = codex_url
         os.environ["OPENAI_BASE_URL"] = codex_url
         os.environ.pop("OPENAI_API_KEY", None)
         return
 
-    key_env, base_env = provider_env_names(provider, get_env_config().llm.langchain_model_name)
+    key_env, base_env = provider_env_names(provider_name, llm_config.langchain_model_name)
 
     # Resolve API key: provider-specific env → OPENAI_API_KEY fallback
     if key_env is not None:
@@ -493,7 +494,7 @@ def _sync_provider_env() -> None:
 
     # Resolve base URL: provider-specific env → OPENAI_BASE_URL fallback
     base_url = os.getenv(base_env, "") or os.getenv("OPENAI_BASE_URL", "") or os.getenv("OPENAI_API_BASE", "")  # noqa: env-gate — dynamic provider URL chain
-    if provider == "ollama" and base_url:
+    if provider_name == "ollama" and base_url:
         base_url = _normalize_ollama_base_url(base_url)
 
     # SDK-side env setup, not Vibe-Trading config reads
@@ -567,12 +568,18 @@ def provider_diagnostics() -> dict[str, Any]:
     }
 
 
-def build_llm(*, model_name: Optional[str] = None, callbacks: Any = None) -> Any:
+def build_llm(
+    *,
+    model_name: Optional[str] = None,
+    callbacks: Any = None,
+    provider: str | None = None,
+) -> Any:
     """Construct a ChatOpenAI instance.
 
     Args:
         model_name: Model name; defaults to LANGCHAIN_MODEL_NAME.
         callbacks: Optional LangChain callbacks.
+        provider: Optional provider override for this construction.
 
     Returns:
         ChatOpenAI instance.
@@ -580,25 +587,30 @@ def build_llm(*, model_name: Optional[str] = None, callbacks: Any = None) -> Any
     Raises:
         RuntimeError: If langchain-openai is missing or LANGCHAIN_MODEL_NAME is unset.
     """
-    _sync_provider_env()
-    name = model_name or get_env_config().llm.langchain_model_name.strip()
+    _ensure_dotenv()
+    reset_env_config()
+    llm_config = get_env_config().llm
+    provider_name = (provider or llm_config.langchain_provider).lower()
+    if not (provider is not None and provider_name in {"openai-codex", "openai_codex"}):
+        _sync_provider_env(provider_name)
+        llm_config = get_env_config().llm
+    name = model_name or llm_config.langchain_model_name.strip()
     if not name:
         raise RuntimeError("LANGCHAIN_MODEL_NAME is not set")
-    temperature = get_env_config().llm.langchain_temperature
-    provider = get_env_config().llm.langchain_provider.lower()
-    caps = get_provider_capabilities(provider, name)
-    if provider in {"openai-codex", "openai_codex"}:
+    temperature = llm_config.langchain_temperature
+    caps = get_provider_capabilities(provider_name, name)
+    if provider_name in {"openai-codex", "openai_codex"}:
         from src.providers.openai_codex import OpenAICodexLLM
 
-        effort = get_env_config().llm.langchain_reasoning_effort.strip().lower()
+        effort = llm_config.langchain_reasoning_effort.strip().lower()
         return OpenAICodexLLM(
             model=name,
             temperature=temperature,
-            timeout=get_env_config().llm.timeout_seconds,
+            timeout=llm_config.timeout_seconds,
             reasoning_effort=effort or None,
         )
 
-    if provider == "deepseek":
+    if provider_name == "deepseek":
         adapter_mode = _deepseek_adapter_mode()
         if adapter_mode != "openai-compatible":
             native_llm = _build_native_deepseek(
@@ -617,7 +629,7 @@ def build_llm(*, model_name: Optional[str] = None, callbacks: Any = None) -> Any
         raise RuntimeError("langchain-openai is not installed")
     # MiniMax requires temperature in (0.0, 1.0] — clamp to 0.01 when the
     # default 0.0 is used to avoid an API validation error.
-    if provider == "minimax" and temperature <= 0.0:
+    if provider_name == "minimax" and temperature <= 0.0:
         temperature = 0.01
     # Kimi reasoning models reject any temperature other than 1
     # ("invalid temperature: only 1 is allowed for this model").
@@ -638,7 +650,7 @@ def build_llm(*, model_name: Optional[str] = None, callbacks: Any = None) -> Any
         "max_retries": get_env_config().llm.max_retries,
         "callbacks": callbacks,
         "extra_body": {"reasoning": {"effort": effort}} if effort and caps.openrouter_reasoning_body else None,
-        "vibe_provider": provider,
+        "vibe_provider": provider_name,
     }
     if caps.default_headers:
         headers = dict(caps.default_headers)

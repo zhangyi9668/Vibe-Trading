@@ -67,6 +67,131 @@ export interface UploadResult {
   filename: string;
 }
 
+export type ProbabilitySource = "polymarket" | "kalshi";
+
+export type ProbabilityTopic =
+  | "monetary_policy"
+  | "macro_economy"
+  | "geopolitics"
+  | "political_elections"
+  | "indices_commodities"
+  | "ai_technology"
+  | "crypto"
+  | "sports"
+  | "entertainment"
+  | "other";
+
+export interface EventProbabilityResult {
+  label: string;
+  label_zh: string | null;
+  probability: number | null;
+  change_24h: number | null;
+  volume_24h: number;
+  token_id: string | null;
+}
+
+export interface EventProbability {
+  question: string;
+  question_zh: string | null;
+  topic: ProbabilityTopic;
+  event_id: string | null;
+  results: EventProbabilityResult[];
+  outcomes: string[];
+  prices: Array<number | null>;
+  prob_yes: number | null;
+  pick_label: string | null;
+  change_24h: number | null;
+  change_7d: number | null;
+  volume_24h: number;
+  liquidity: number;
+  end_date: string | null;
+  slug: string;
+  series_ticker: string | null;
+  token_id_yes: string | null;
+  source: ProbabilitySource;
+  source_category: string | null;
+}
+
+export interface ProbabilityTranslationStats {
+  new_translations: number;
+  cache_hits: number;
+  pending: number;
+}
+
+export interface ProbabilityRefreshState {
+  status: "idle" | "queued" | "running" | "done" | "error";
+  kind: "quick" | "full" | null;
+  stage: string | null;
+  progress_current: number;
+  progress_total: number;
+  started_at: string | null;
+  finished_at: string | null;
+  error: string | null;
+  translation: ProbabilityTranslationStats;
+}
+
+export interface ProbabilitySourceStatus {
+  source: ProbabilitySource;
+  status: "ok" | "stale" | "error" | "empty";
+  as_of: string | null;
+  event_count: number;
+  error: string | null;
+}
+
+export interface ProbabilityOverview {
+  as_of: string | null;
+  events: EventProbability[];
+  sources: ProbabilitySourceStatus[];
+  translation_cache_size: number;
+  refresh: ProbabilityRefreshState;
+}
+
+export interface ProbabilityHistorySeriesRequest {
+  label: string;
+  token_id: string;
+}
+
+export interface ProbabilityHistorySeries {
+  label: string;
+  token_id: string;
+  points: Array<{ t: number; p: number }>;
+  error: string | null;
+}
+
+export interface SemiconductorQuote {
+  code: string;
+  name: string;
+  segment: string;
+  price: number | null;
+  change_pct: number | null;
+  amount: number | null;
+  market_cap: number | null;
+  pe_ttm: number | null;
+  pb: number | null;
+  source: "Wind" | "iFinD" | "不可用" | string;
+  error: string | null;
+}
+
+export interface SemiconductorQuotesPayload {
+  updated_at: string;
+  success_count: number;
+  error_count: number;
+  rows: SemiconductorQuote[];
+}
+
+export interface SemiconductorHealth {
+  status: string;
+  wind_cli: boolean;
+  ifind_configured: boolean;
+}
+
+export interface IndustrySummary {
+  slug: string;
+  name: string;
+  summary: string;
+  refreshable: boolean;
+}
+
 async function uploadFile(file: File): Promise<UploadResult> {
   const form = new FormData();
   form.append("file", file);
@@ -154,6 +279,30 @@ export const api = {
       method: "PUT",
       body: JSON.stringify(settings),
     }),
+  getEventProbabilityOverview: () =>
+    request<ProbabilityOverview>("/event-probability/overview"),
+  startEventProbabilityRefresh: (kind: "quick" | "full") =>
+    request<ProbabilityRefreshState>(`/event-probability/refresh/${kind}`, {
+      method: "POST",
+    }),
+  getEventProbabilityRefreshStatus: () =>
+    request<ProbabilityRefreshState>("/event-probability/refresh/status"),
+  getEventProbabilityHistory: (tokenId: string) =>
+    request<Array<{ t: number; p: number }>>(
+      `/event-probability/history/${encodeURIComponent(tokenId)}`,
+    ),
+  getEventProbabilityHistories: (series: ProbabilityHistorySeriesRequest[]) =>
+    request<ProbabilityHistorySeries[]>("/event-probability/history", {
+      method: "POST",
+      body: JSON.stringify({ series }),
+    }),
+  getSemiconductorHealth: () =>
+    request<SemiconductorHealth>("/semiconductor/health"),
+  getSemiconductorQuotes: () =>
+    request<SemiconductorQuotesPayload>("/semiconductor/quotes"),
+  getIndustries: () => request<{ industries: IndustrySummary[] }>("/industries"),
+  getIndustryQuotes: (slug: string) => request<SemiconductorQuotesPayload & { industry: string }>(`/industries/${slug}/quotes`),
+  getIndustryReport: (slug: string) => request<{ industry: string; content: string }>(`/industries/${slug}/report`),
   getChannelStatus: () => request<ChannelRuntimeStatus>("/channels/status"),
   startChannels: () => request<ChannelRuntimeActionResponse>("/channels/start", { method: "POST" }),
   stopChannels: () => request<ChannelRuntimeActionResponse>("/channels/stop", { method: "POST" }),

@@ -14,6 +14,7 @@ const PROXY_PATHS = [
   "/live",
   "/upload",
   "/shadow-reports",
+  "^/event-probability/",
 ];
 
 export default defineConfig(({ mode }) => {
@@ -45,6 +46,7 @@ export default defineConfig(({ mode }) => {
         "^/runs/[^/]+/?$": apiProxyWithHtmlFallback,
         "/runs": apiProxy,
         "/correlation": apiProxyWithHtmlFallback,
+        "/event-probability": apiProxyWithHtmlFallback,
         "^/alpha(?:/|$)": apiProxy,
       },
     },
@@ -57,6 +59,9 @@ export default defineConfig(({ mode }) => {
           },
         },
       },
+    },
+    test: {
+      environment: "jsdom",
     },
   };
 });

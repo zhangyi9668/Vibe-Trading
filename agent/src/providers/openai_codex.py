@@ -9,10 +9,13 @@ key path because ChatGPT OAuth tokens are not OpenAI API keys.
 from __future__ import annotations
 
 import asyncio
+import base64
 import hashlib
 import json
 import os
+import time
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Callable, Iterable, Optional
 from urllib.parse import urlparse
 
@@ -25,6 +28,14 @@ except ImportError:
 
 DEFAULT_CODEX_URL = "https://chatgpt.com/backend-api/codex/responses"
 DEFAULT_ORIGINATOR = "vibe-trading"
+DEFAULT_EVENT_TRANSLATION_MODEL = "openai-codex/gpt-5.4-mini"
+
+
+def get_event_translation_model() -> str:
+    return (
+        os.getenv("EVENT_PROBABILITY_TRANSLATION_MODEL", "").strip()
+        or DEFAULT_EVENT_TRANSLATION_MODEL
+    )
 
 
 @dataclass
@@ -88,16 +99,58 @@ def login_openai_codex(
 def get_openai_codex_login_status() -> Any | None:
     """Return the persisted OAuth token, if available."""
     try:
-        from oauth_cli_kit import get_token
-    except ImportError:
-        return None
-    try:
-        token = get_token()
+        return _get_codex_token()
     except Exception:
         return None
-    if token and getattr(token, "access", None):
-        return token
-    return None
+
+
+def _jwt_expiry_ms(token: str) -> int:
+    try:
+        payload = token.split(".")[1]
+        payload += "=" * (-len(payload) % 4)
+        decoded = json.loads(base64.urlsafe_b64decode(payload).decode("utf-8"))
+        return int(decoded["exp"]) * 1000
+    except (IndexError, KeyError, TypeError, ValueError, json.JSONDecodeError):
+        return int(time.time() * 1000 + 5 * 60 * 1000)
+
+
+class _MemoryTokenStorage:
+    def __init__(self, token: Any) -> None:
+        self.token = token
+
+    def load(self) -> Any:
+        return self.token
+
+    def save(self, token: Any) -> None:
+        self.token = token
+
+    def get_token_path(self) -> Path:
+        return Path.home() / ".codex" / "auth.json"
+
+
+def _load_codex_cli_token() -> Any | None:
+    try:
+        from oauth_cli_kit import OAuthToken
+    except ImportError:
+        return None
+
+    path = Path.home() / ".codex" / "auth.json"
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        tokens = data.get("tokens") or {}
+        access = tokens.get("access_token")
+        refresh = tokens.get("refresh_token")
+        account_id = tokens.get("account_id")
+        if not access or not refresh or not account_id:
+            return None
+        return OAuthToken(
+            access=str(access),
+            refresh=str(refresh),
+            expires=_jwt_expiry_ms(str(access)),
+            account_id=str(account_id),
+        )
+    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+        return None
 
 
 def _get_codex_token() -> Any:
@@ -110,8 +163,20 @@ def _get_codex_token() -> Any:
         ) from exc
     try:
         token = get_token()
-    except Exception as exc:
-        raise RuntimeError("OpenAI Codex is not logged in. Run: vibe-trading provider login openai-codex") from exc
+    except Exception:
+        imported = _load_codex_cli_token()
+        if imported is None:
+            raise RuntimeError(
+                "OpenAI Codex is not logged in. Run: "
+                "vibe-trading provider login openai-codex"
+            )
+        try:
+            token = get_token(storage=_MemoryTokenStorage(imported))
+        except Exception as exc:
+            raise RuntimeError(
+                "OpenAI Codex is not logged in. Run: "
+                "vibe-trading provider login openai-codex"
+            ) from exc
     if not (token and getattr(token, "access", None) and getattr(token, "account_id", None)):
         raise RuntimeError("OpenAI Codex is not logged in. Run: vibe-trading provider login openai-codex")
     return token
