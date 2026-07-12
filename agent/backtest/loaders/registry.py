@@ -48,6 +48,8 @@ VALID_SOURCES: set[str] = {
     "alphavantage",
     "tiingo",
     "fmp",
+    "qveris",  # QVERIS-INTEGRATION
+    "india_broker",
     "local",
     "wind_local",
     "auto",
@@ -93,13 +95,18 @@ def _ensure_registered() -> None:
         "backtest.loaders.alphavantage_loader",
         "backtest.loaders.tiingo_loader",
         "backtest.loaders.fmp_loader",
+        "backtest.loaders.qveris_loader",  # QVERIS-INTEGRATION
+        "backtest.loaders.india_broker_loader",
         "backtest.loaders.local_loader",
         "backtest.loaders.wind_local_loader",
     ]
     import importlib
     for mod in _loader_modules:
         try:
-            importlib.import_module(mod)
+            module = importlib.import_module(mod)
+            loader_cls = getattr(module, "DataLoader", None)
+            if loader_cls is not None and getattr(loader_cls, "name", None) not in LOADER_REGISTRY:
+                register(loader_cls)
         except Exception:
             pass
 
@@ -111,7 +118,9 @@ def _ensure_registered() -> None:
 # unavailable ``local`` request can degrade into an unrelated network source.
 # An explicit ``local`` request that is unavailable is a config problem the user
 # must see, not something to paper over with a Yahoo/Tencent fetch.
-_NO_NETWORK_FALLBACK_SOURCES: frozenset[str] = frozenset({"local", "wind_local"})
+_NO_NETWORK_FALLBACK_SOURCES: frozenset[str] = frozenset(
+    {"local", "qveris", "wind_local"}
+)  # QVERIS-INTEGRATION
 
 
 # ---------------------------------------------------------------------------
@@ -127,6 +136,7 @@ FALLBACK_CHAINS: dict[str, list[str]] = {
     "a_share":   ["tencent", "mootdx", "eastmoney", "baostock", "akshare", "tushare", "local"],
     "us_equity": ["yahoo", "stooq", "sina", "eastmoney", "yfinance", "tiingo", "fmp", "finnhub", "alphavantage", "akshare", "local"],
     "hk_equity": ["eastmoney", "yahoo", "futu", "yfinance", "akshare", "local"],
+    "india_equity": ["yahoo", "yfinance", "india_broker", "local"],
     "crypto":    ["okx", "ccxt", "yfinance", "local"],
     "futures":   ["tushare", "akshare", "local"],
     "fund":      ["tushare", "akshare", "local"],
