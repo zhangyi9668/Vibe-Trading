@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -12,12 +11,13 @@ import pandas as pd
 
 from backtest.loaders.base import validate_date_range, validate_ohlc
 from backtest.loaders.registry import register
+from src.config.accessor import get_env_config
 
 logger = logging.getLogger(__name__)
 
 
 def _discover_data_root() -> Path:
-    configured = os.getenv("VIBE_WIND_DATA_DIR", "").strip()
+    configured = get_env_config().paths.vibe_wind_data_dir.strip()
     if configured:
         return Path(configured).expanduser()
     for parent in Path(__file__).resolve().parents:

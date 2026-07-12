@@ -79,6 +79,7 @@ class TestEnvConfigDefaults:
         assert c.llm.vibe_trading_deepseek_adapter == "auto"
         assert c.llm.moonshot_user_agent == ""
         assert c.llm.openai_codex_base_url == "https://chatgpt.com/backend-api/codex/responses"
+        assert c.llm.event_probability_translation_model == "openai-codex/gpt-5.4-mini"
 
     def test_data_defaults(self) -> None:
         c = EnvConfig()
@@ -98,6 +99,9 @@ class TestEnvConfigDefaults:
         assert c.data.vibe_trading_data_cache is False
         assert c.data.vibe_trading_data_cache_root == ""
         assert c.data.aliyun_iqs_api_key == ""
+        assert c.data.ifind_access_token == ""
+        assert c.data.ifind_refresh_token == ""
+        assert c.data.ifind_base_url == "https://quantapi.51ifind.com/api/v1"
 
     def test_api_defaults(self) -> None:
         c = EnvConfig()
@@ -146,6 +150,8 @@ class TestEnvConfigDefaults:
         assert c.paths.vibe_trading_goal_db_path == ""
         assert c.paths.vibe_trading_swarm_agent_config == ""
         assert c.paths.allow_session_mcp_servers is False
+        assert c.paths.vibe_node == "/Users/phoebe/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node"
+        assert c.paths.vibe_wind_data_dir == ""
 
 
 # ===================================================================
@@ -201,6 +207,23 @@ class TestEnvConfigTypeCoercion:
 
 class TestEnvConfigOverride:
     """Verify env vars override defaults and reset restores them."""
+
+    def test_local_research_overrides(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("EVENT_PROBABILITY_TRANSLATION_MODEL", "openai-codex/test-model")
+        monkeypatch.setenv("IFIND_ACCESS_TOKEN", "access-token")
+        monkeypatch.setenv("IFIND_REFRESH_TOKEN", "refresh-token")
+        monkeypatch.setenv("IFIND_BASE_URL", "https://ifind.example/api")
+        monkeypatch.setenv("VIBE_NODE", "/opt/node")
+        monkeypatch.setenv("VIBE_WIND_DATA_DIR", "/opt/wind-data")
+
+        c = EnvConfig()
+
+        assert c.llm.event_probability_translation_model == "openai-codex/test-model"
+        assert c.data.ifind_access_token == "access-token"
+        assert c.data.ifind_refresh_token == "refresh-token"
+        assert c.data.ifind_base_url == "https://ifind.example/api"
+        assert c.paths.vibe_node == "/opt/node"
+        assert c.paths.vibe_wind_data_dir == "/opt/wind-data"
 
     def test_env_override_and_reset(
         self, monkeypatch: pytest.MonkeyPatch

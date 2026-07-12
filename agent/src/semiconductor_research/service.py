@@ -10,16 +10,11 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from src.config.accessor import get_env_config, reset_env_config
+
 
 WIND_SKILL_DIR = Path("/Users/phoebe/.agents/skills/wind-mcp-skill")
 WIND_CLI = WIND_SKILL_DIR / "scripts/cli.mjs"
-NODE = Path(
-    os.getenv(
-        "VIBE_NODE",
-        "/Users/phoebe/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node",
-    )
-)
-
 WIND_INDEXES = "中文简称,最新成交价,涨跌幅,成交额,总市值2,市盈率(TTM),市净率(LF)"
 IFIND_INDICATORS = "latest,changeRatio,amount,totalMarketValue,pe_ttm,pb"
 
@@ -233,18 +228,20 @@ class SemiconductorQuoteService:
         return {"industry": slug, "content": reports[0].read_text(encoding="utf-8")}
 
     def ifind_configured(self) -> bool:
-        return bool(os.getenv("IFIND_ACCESS_TOKEN") or os.getenv("IFIND_REFRESH_TOKEN"))
+        config = get_env_config().data
+        return bool(config.ifind_access_token or config.ifind_refresh_token)
 
     def source_order(self) -> list[str]:
         return ["ifind", "wind"] if self.ifind_configured() else ["wind", "ifind"]
 
     def call_wind(self, company: dict[str, str]) -> dict[str, Any]:
-        if not WIND_CLI.exists() or not NODE.exists():
+        node = Path(get_env_config().paths.vibe_node)
+        if not WIND_CLI.exists() or not node.exists():
             raise RuntimeError("Wind CLI 或 Node 运行时不存在")
         params = {"windcode": company["code"], "indexes": WIND_INDEXES}
         result = subprocess.run(
             [
-                str(NODE),
+                str(node),
                 str(WIND_CLI),
                 "call",
                 "stock_data",
@@ -287,13 +284,14 @@ class SemiconductorQuoteService:
         }
 
     def get_ifind_token(self, force_refresh: bool = False) -> str:
-        access_token = os.getenv("IFIND_ACCESS_TOKEN")
+        config = get_env_config().data
+        access_token = config.ifind_access_token
         if access_token and not force_refresh:
             return access_token
-        refresh_token = os.getenv("IFIND_REFRESH_TOKEN")
+        refresh_token = config.ifind_refresh_token
         if not refresh_token:
             raise RuntimeError("iFinD Token 未配置")
-        base = os.getenv("IFIND_BASE_URL", "https://quantapi.51ifind.com/api/v1").rstrip("/")
+        base = config.ifind_base_url.rstrip("/")
         request = urllib.request.Request(
             f"{base}/get_access_token",
             method="POST",
@@ -306,10 +304,11 @@ class SemiconductorQuoteService:
         if not token:
             raise RuntimeError("iFinD 无法取得 access_token")
         os.environ["IFIND_ACCESS_TOKEN"] = str(token)
+        reset_env_config()
         return str(token)
 
     def _ifind_post(self, body: dict[str, Any]) -> dict[str, Any]:
-        base = os.getenv("IFIND_BASE_URL", "https://quantapi.51ifind.com/api/v1").rstrip("/")
+        base = get_env_config().data.ifind_base_url.rstrip("/")
         data = json.dumps(body).encode("utf-8")
         token = self.get_ifind_token()
         request = urllib.request.Request(

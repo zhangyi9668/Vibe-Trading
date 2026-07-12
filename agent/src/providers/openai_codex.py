@@ -12,7 +12,6 @@ import asyncio
 import base64
 import hashlib
 import json
-import os
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -32,10 +31,7 @@ DEFAULT_EVENT_TRANSLATION_MODEL = "openai-codex/gpt-5.4-mini"
 
 
 def get_event_translation_model() -> str:
-    return (
-        os.getenv("EVENT_PROBABILITY_TRANSLATION_MODEL", "").strip()
-        or DEFAULT_EVENT_TRANSLATION_MODEL
-    )
+    return get_env_config().llm.event_probability_translation_model.strip() or DEFAULT_EVENT_TRANSLATION_MODEL
 
 
 @dataclass

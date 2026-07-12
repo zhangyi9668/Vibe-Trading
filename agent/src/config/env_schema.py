@@ -135,6 +135,10 @@ class LLMConfig(_EnvBase):
         default="https://chatgpt.com/backend-api/codex/responses",
     )
     openai_model: str = Field(alias="OPENAI_MODEL", default="")
+    event_probability_translation_model: str = Field(
+        alias="EVENT_PROBABILITY_TRANSLATION_MODEL",
+        default="openai-codex/gpt-5.4-mini",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -165,6 +169,12 @@ class DataConfig(_EnvBase):
     vibe_trading_data_cache: EnvBool = Field(alias="VIBE_TRADING_DATA_CACHE", default=False)
     vibe_trading_data_cache_root: str = Field(alias="VIBE_TRADING_DATA_CACHE_ROOT", default="")
     aliyun_iqs_api_key: str = Field(alias="ALIYUN_IQS_API_KEY", default="")
+    ifind_access_token: str = Field(alias="IFIND_ACCESS_TOKEN", default="")
+    ifind_refresh_token: str = Field(alias="IFIND_REFRESH_TOKEN", default="")
+    ifind_base_url: str = Field(
+        alias="IFIND_BASE_URL",
+        default="https://quantapi.51ifind.com/api/v1",
+    )
     qveris_api_key: str = Field(alias="QVERIS_API_KEY", default="")
     qveris_base_url: str = Field(alias="QVERIS_BASE_URL", default="")
     rsshub_base_url: str = Field(alias="RSSHUB_BASE_URL", default="")
@@ -301,6 +311,11 @@ class PathConfig(_EnvBase):
     allow_session_mcp_servers: EnvBool = Field(alias="ALLOW_SESSION_MCP_SERVERS", default=False)
     vibe_trading_theme: str = Field(alias="VIBE_TRADING_THEME", default="")
     vibe_goal_session_id: str = Field(alias="VIBE_GOAL_SESSION_ID", default="")
+    vibe_node: str = Field(
+        alias="VIBE_NODE",
+        default="/Users/phoebe/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node",
+    )
+    vibe_wind_data_dir: str = Field(alias="VIBE_WIND_DATA_DIR", default="")
 
 
 # ---------------------------------------------------------------------------
